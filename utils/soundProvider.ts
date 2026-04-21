@@ -1,10 +1,10 @@
 import { Audio } from 'expo-av';
 import { getSettings } from './settingsManager';
-import { getCachedUri } from './assetManager';
+import { getAssetModule } from './assetManager';
 
 let sounds: { [key: string]: Audio.Sound } = {};
 
-const SOUND_FILES = {
+const SOUND_FILES: Record<string, string> = {
   pop: 'pop.mp3',
   click: 'click.mp3',
   magic: 'magic.mp3',
@@ -15,22 +15,22 @@ const SOUND_FILES = {
 export async function preloadSounds() {
   try {
     for (const [key, fileName] of Object.entries(SOUND_FILES)) {
+      const mod = getAssetModule('sounds', fileName);
+      if (mod == null) continue;
       const sound = new Audio.Sound();
-      const localUri = getCachedUri('sounds', fileName);
-      console.log(`Preloading cached sound: ${key} from ${localUri}`);
-      await sound.loadAsync({ uri: localUri });
+      await sound.loadAsync(mod);
       sounds[key] = sound;
     }
   } catch (error) {
-    console.warn("Could not load cached sounds", error);
+    console.warn('Could not load bundled sounds', error);
   }
 }
 
-export async function playSound(name: keyof typeof SOUND_FILES) {
+export async function playSound(name: string) {
   try {
     const settings = getSettings();
     if (!settings.soundEnabled) return;
-    
+
     const sound = sounds[name];
     if (sound) {
       await sound.replayAsync();
@@ -46,4 +46,5 @@ export async function unloadSounds() {
       await sounds[key].unloadAsync();
     } catch {}
   }
+  sounds = {};
 }

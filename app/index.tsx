@@ -15,7 +15,7 @@ import { preloadSounds, playSound } from '../utils/soundProvider';
 import { t } from '../utils/translations';
 import { loadSettings } from '../utils/settingsManager';
 import { API } from '../utils/api';
-import { downloadCoreAssets, getCachedUri } from '../utils/assetManager';
+import { downloadCoreAssets, getAssetModule } from '../utils/assetManager';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SPLASH_DURATION = 5500; // 5.5 seconds total
@@ -395,7 +395,7 @@ export default function SplashScreen() {
           ],
         }]}>
           <Image
-            source={{ uri: getCachedUri('images', 'login_page_loading.jpg') }}
+            source={getAssetModule('images', 'login_page_loading.jpg')}
             style={styles.mascotImage}
             resizeMode="contain"
           />

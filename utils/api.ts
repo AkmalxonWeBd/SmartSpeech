@@ -1,115 +1,114 @@
-import * as Application from 'expo-application';
-import { Platform } from 'react-native';
+/**
+ * Offline data layer — serverga ulanmasdan, app ichida bundle qilingan
+ * words.json va AsyncStorage orqali ishlaydi. Interfeys avvalgi `API`
+ * obyektining sanoat bo'yicha mos keladi, shuning uchun ekranlar deyarli
+ * o'zgarmasdan ishlaydi.
+ */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const wordsDB: WordsEntry[] = require('../assets/data/words.json');
 
-// In development, you might need to use your machine's local IP address
-// Example: 'http://192.168.1.5:3000'
-const BASE_URL = 'https://109.205.180.84.nip.io/smartspeech'; 
+type Word = { en: string; uz: string };
+type WordsEntry = { level: string; lesson: number; words: Word[] };
 
-// Generate a simple UUID
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+export type UserData = {
+  name: string;
+  age: number;
+  level: string;
+  progress: number;
+  createdAt?: string;
+};
+
+const USER_KEY = 'user_data';
+
+async function readUser(): Promise<UserData | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as UserData) : null;
+  } catch {
+    return null;
+  }
 }
 
-export async function getDeviceId(): Promise<string> {
-  // Try to get from cache first
-  const cached = await AsyncStorage.getItem('device_unique_id');
-  if (cached) return cached;
+async function writeUser(user: UserData): Promise<UserData> {
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+  return user;
+}
 
-  // Try native ID
-  let nativeId: string | null = null;
-  if (Platform.OS === 'android') {
-    nativeId = Application.androidId ?? null;
-  } else {
-    nativeId = await Application.getIosIdForVendorAsync();
+function shuffle<T>(arr: T[]): T[] {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
   }
-
-  // Use native ID or generate a UUID
-  const deviceId = nativeId || generateUUID();
-  await AsyncStorage.setItem('device_unique_id', deviceId);
-  return deviceId;
+  return out;
 }
 
 export const API = {
-  baseUrl: BASE_URL,
-
-  async syncUser(userData: { name: string; age: number; level: string }) {
-    const deviceId = await getDeviceId();
-    const response = await fetch(`${BASE_URL}/api/user/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId, ...userData }),
-    });
-    return response.json();
+  /**
+   * Offline-only: foydalanuvchi ma'lumotini AsyncStorage'ga saqlaydi va qaytaradi.
+   */
+  async syncUser(userData: { name: string; age: number; level: string; progress?: number }) {
+    const existing = await readUser();
+    const next: UserData = {
+      ...existing,
+      name: userData.name,
+      age: userData.age,
+      level: userData.level,
+      progress: userData.progress ?? existing?.progress ?? 0,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+    };
+    const saved = await writeUser(next);
+    return { success: true, user: saved };
   },
 
-  async getUser() {
-    const deviceId = await getDeviceId();
-    const response = await fetch(`${BASE_URL}/api/user/${deviceId}`);
-    if (!response.ok) return null;
-    return response.json();
+  async getUser(): Promise<UserData | null> {
+    return readUser();
   },
 
   async updateProgress(progress: number) {
-    const deviceId = await getDeviceId();
-    const response = await fetch(`${BASE_URL}/api/user/progress`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId, progress }),
-    });
-    return response.json();
+    const user = await readUser();
+    if (!user) return { success: false };
+    user.progress = progress;
+    await writeUser(user);
+    return { success: true, progress };
   },
 
   async getLessons() {
-    const response = await fetch(`${BASE_URL}/api/lessons`);
-    return response.json();
+    return Array.from({ length: 12 }, (_, i) => ({
+      id: i + 1,
+      title: `Lesson ${i + 1}`,
+      type: 'dars',
+    }));
   },
 
-  async getLessonWords(level: string, lesson: number): Promise<{ en: string; uz: string }[]> {
-    try {
-      const response = await fetch(`${BASE_URL}/api/lesson-words?level=${level}&lesson=${lesson}`);
-      if (!response.ok) return [];
-      const data = await response.json();
-      return data.words || [];
-    } catch (e) {
-      console.warn('Failed to fetch lesson words', e);
-      return [];
+  async getLessonWords(level: string, lesson: number): Promise<Word[]> {
+    const entry = wordsDB.find(
+      (e) => e.level.toUpperCase() === String(level).toUpperCase() && e.lesson === Number(lesson),
+    );
+    return entry ? entry.words : [];
+  },
+
+  async getWords(letters: string[], count = 4): Promise<Record<string, Word[]>> {
+    const all: Word[] = wordsDB.reduce<Word[]>((acc, e) => acc.concat(e.words), []);
+    const result: Record<string, Word[]> = {};
+    for (const raw of letters) {
+      const letter = String(raw).trim().toLowerCase();
+      const matches = all.filter((w) => w.en.toLowerCase().startsWith(letter));
+      const unique = Array.from(new Map(matches.map((w) => [w.en, w])).values());
+      result[letter.toUpperCase()] = shuffle(unique).slice(0, count);
     }
+    return result;
   },
 
-  async getWords(letters: string[]) {
-    try {
-      const response = await fetch(`${BASE_URL}/api/words?letters=${letters.join(',')}`);
-      if (!response.ok) return {};
-      return response.json();
-    } catch (e) {
-      console.warn('Failed to fetch words', e);
-      return {};
-    }
+  /**
+   * Offline mock — haqiqiy STT yo'q. Chaqiruvchi ekranlarda allaqachon
+   * lokal `expo-speech-recognition` transcripti taqqoslanayapti; bu faqat
+   * eski chaqirishlar (agar bo'lsa) uchun backward-compatibility uchun.
+   */
+  async checkPronunciation(_audioUri: string, _expectedText: string) {
+    const success = Math.random() > 0.2;
+    const score = success ? 80 + Math.floor(Math.random() * 20) : 40 + Math.floor(Math.random() * 30);
+    return { success, score };
   },
-
-  async checkPronunciation(audioUri: string, expectedText: string) {
-    try {
-      // For a real app, you would upload the audio file using FormData.
-      // Since this is a demo/mock, we just call the endpoint.
-      const response = await fetch(`${BASE_URL}/api/check-voice`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expectedText }),
-      });
-      if (!response.ok) return { success: false, score: 0 };
-      return response.json();
-    } catch (e) {
-      console.warn('Voice check failed', e);
-      return { success: false, score: 0 };
-    }
-  },
-
-  getAssetUrl(type: 'sounds' | 'images' | 'videos', fileName: string) {
-    return `${BASE_URL}/assets/${type}/${fileName}`;
-  }
 };

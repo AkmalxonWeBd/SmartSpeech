@@ -1,66 +1,56 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { useVideoPlayer, VideoView, VideoPlayerStatus } from 'expo-video';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as FileSystem from 'expo-file-system/legacy';
-import { getCachedUri } from '../utils/assetManager';
-import { API } from '../utils/api';
+import { getAssetModule } from '../utils/assetManager';
 
 const VIDEO_FILE = 'harflar.mp4';
 
 export default function IntroVideoScreen() {
   const { nextRoute, canSkip } = useLocalSearchParams();
-  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [errored, setErrored] = useState(false);
 
-  // Lokal keshda bo'lsa — shundan, bo'lmasa to'g'ridan-to'g'ri serverdan stream.
-  // Shu tarzda splash'da yuklash tugamagan bo'lsa ham qora ekran bo'lmaydi.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const localUri = getCachedUri('videos', VIDEO_FILE);
-        const info = await FileSystem.getInfoAsync(localUri);
-        if (cancelled) return;
-        setVideoUri(info.exists ? localUri : API.getAssetUrl('videos', VIDEO_FILE));
-      } catch (e) {
-        console.warn('Intro video resolve failed, falling back to remote', e);
-        if (!cancelled) setVideoUri(API.getAssetUrl('videos', VIDEO_FILE));
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // Offline rejim — `require(...)` orqali bundle qilingan asset ID.
+  const videoSource = getAssetModule('videos', VIDEO_FILE) ?? null;
 
-  const player = useVideoPlayer(videoUri, (p) => {
+  const player = useVideoPlayer(videoSource, (p) => {
     p.loop = false;
-    p.play();
+    p.muted = false;
+    try {
+      p.play();
+    } catch (e) {
+      console.warn('[IntroVideo] play() threw', e);
+    }
   });
 
+  const handleFinish = () => {
+    if (nextRoute) router.replace(nextRoute as any);
+    else router.back();
+  };
+
   useEffect(() => {
-    if (!player) return;
-    const subscription = player.addListener('playToEnd', () => {
-      handleFinish();
-    });
-    return () => subscription.remove();
+    const endSub = player.addListener('playToEnd', handleFinish);
+    const statusSub = player.addListener(
+      'statusChange',
+      ({ status, error }: { status: VideoPlayerStatus; error?: unknown }) => {
+        console.log('[IntroVideo] status:', status, error ?? '');
+        if (status === 'error') setErrored(true);
+      },
+    );
+    return () => {
+      endSub.remove();
+      statusSub.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player]);
 
-  const handleFinish = () => {
-    if (nextRoute) {
-      router.replace(nextRoute as any);
-    } else {
-      router.back();
-    }
-  };
-
-  const skipVideo = () => {
-    try { player?.pause(); } catch {}
-    handleFinish();
-  };
-
-  if (!videoUri) {
+  if (errored || videoSource == null) {
     return (
-      <View style={[styles.container, styles.loadingWrap]}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.loadingText}>Video tayyorlanmoqda...</Text>
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.loadingText}>Video topilmadi</Text>
+        <TouchableOpacity style={styles.skipButton} onPress={handleFinish}>
+          <Text style={styles.skipText}>Davom etish ▶</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -70,13 +60,20 @@ export default function IntroVideoScreen() {
       <VideoView
         style={styles.video}
         player={player}
+        contentFit="contain"
         allowsFullscreen={false}
         allowsPictureInPicture={false}
         nativeControls={false}
       />
 
       {canSkip === 'true' && (
-        <TouchableOpacity style={styles.skipButton} onPress={skipVideo}>
+        <TouchableOpacity
+          style={styles.skipButton}
+          onPress={() => {
+            try { player.pause(); } catch {}
+            handleFinish();
+          }}
+        >
           <Text style={styles.skipText}>O&apos;tkazib yuborish ⏭</Text>
         </TouchableOpacity>
       )}
@@ -89,7 +86,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  loadingWrap: {
+  center: {
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -101,6 +98,8 @@ const styles = StyleSheet.create({
   },
   video: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   skipButton: {
     position: 'absolute',

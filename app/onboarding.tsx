@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { API } from '../utils/api';
-import { getCachedUri } from '../utils/assetManager';
+import { getAssetModule } from '../utils/assetManager';
 import { playSound } from '../utils/soundProvider';
 import { t } from '../utils/translations';
 import { loadSettings } from '../utils/settingsManager';
@@ -736,7 +736,7 @@ export default function OnboardingScreen() {
             ],
           }}>
             <Image
-              source={{ uri: getCachedUri('images', 'login_page_loading.jpg') }}
+              source={getAssetModule('images', 'login_page_loading.jpg')}
               style={styles.mascotImage}
               resizeMode="contain"
             />
