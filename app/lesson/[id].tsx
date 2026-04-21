@@ -11,49 +11,7 @@ import { getLettersForLesson } from '../../utils/alphabetData';
 import { API } from '../../utils/api';
 import { playSound } from '../../utils/soundProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Custom Confetti Component
-function ConfettiParticle({ delay, x, screenHeight }: { delay: number; x: number; screenHeight: number }) {
-  const translateY = useRef(new Animated.Value(-50)).current;
-  const rotate = useRef(new Animated.Value(0)).current;
-  const colors = ['#FFC300', '#FF5733', '#C70039', '#900C3F', '#581845', '#3498DB', '#2ECC71'];
-  const color = colors[Math.floor(Math.random() * colors.length)];
-  const size = 10 + Math.random() * 15;
-
-  useEffect(() => {
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: screenHeight + 50,
-          duration: 2500 + Math.random() * 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(rotate, {
-          toValue: 1,
-          duration: 2000 + Math.random() * 1000,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, delay);
-  }, []);
-
-  const spin = rotate.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg']
-  });
-
-  return (
-    <Animated.View style={{
-      position: 'absolute',
-      left: x,
-      top: 0,
-      width: size,
-      height: size,
-      backgroundColor: color,
-      transform: [{ translateY }, { rotate: spin }, { skewX: spin }]
-    }} />
-  );
-}
+import VictoryOverlay from '../../components/VictoryOverlay';
 
 type QueueItem = 
   | { type: 'letter'; text: string }
@@ -62,7 +20,7 @@ type QueueItem =
 export default function LessonScreen() {
   const { id } = useLocalSearchParams();
   const lessonId = parseInt(id as string, 10);
-  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  useWindowDimensions();
   
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -542,23 +500,6 @@ export default function LessonScreen() {
     );
   }
 
-  if (isVictory) {
-    const confettiArray = Array.from({ length: 80 }, (_, i) => ({
-      id: i,
-      x: Math.random() * SCREEN_W,
-      delay: Math.random() * 1500,
-    }));
-
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFD700', overflow: 'hidden' }]}>
-        {confettiArray.map(c => (
-          <ConfettiParticle key={c.id} x={c.x} delay={c.delay} screenHeight={SCREEN_H} />
-        ))}
-        <Animated.Text style={[styles.victoryText, { transform: [{ scale: itemScale }] }]}>OFAARIN! 🎉</Animated.Text>
-      </View>
-    );
-  }
-
   const currentItem = queue[currentIndex];
   if (!currentItem) return null;
 
@@ -620,12 +561,19 @@ export default function LessonScreen() {
             </Text>
             {recognizedText ? (
               <Text style={styles.recognizedText}>
-                "{recognizedText}"
+                &quot;{recognizedText}&quot;
               </Text>
             ) : null}
           </View>
         </View>
       </View>
+
+      <VictoryOverlay
+        visible={isVictory}
+        title="AJOYIB!"
+        subtitle={`Dars ${lessonId} tugatildi`}
+        icon="🏆"
+      />
     </LinearGradient>
   );
 }
@@ -762,13 +710,4 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
-  victoryText: {
-    fontSize: 60,
-    fontWeight: '900',
-    color: '#FFF',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 10,
-    textAlign: 'center',
-  }
 });

@@ -7,6 +7,7 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { API } from '../utils/api';
 import { playSound } from '../utils/soundProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import VictoryOverlay from '../components/VictoryOverlay';
 
 type Word = { en: string; uz: string };
 type Phase = 'learn' | 'match' | 'speak' | 'dictation' | 'recall' | 'victory';
@@ -19,7 +20,7 @@ export default function WordLessonScreen() {
   const params = useLocalSearchParams();
   const level = (params.level as string) || 'A1';
   const lessonNum = parseInt(params.lesson as string) || 1;
-  const { width: SW, height: SH } = useWindowDimensions();
+  useWindowDimensions();
 
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
@@ -326,17 +327,24 @@ export default function WordLessonScreen() {
   const handleVictory = async () => {
     setPhase('victory'); playSound('victory');
     animIn();
+    let unlocked = lessonNum + 1;
     try {
       const us = await AsyncStorage.getItem('user_data');
       if (us) {
         const u = JSON.parse(us);
         const np = Math.max(u.progress||1, lessonNum+1);
+        unlocked = np;
         u.progress = np;
         await AsyncStorage.setItem('user_data', JSON.stringify(u));
         await API.updateProgress(np);
       }
     } catch(_){}
-    setTimeout(() => router.replace('/dashboard'), 4000);
+    setTimeout(() => {
+      router.replace({
+        pathname: '/dashboard',
+        params: { unlockedLesson: String(unlocked) },
+      });
+    }, 4200);
   };
 
   // === RENDER ===
@@ -365,16 +373,15 @@ export default function WordLessonScreen() {
   );
 
   if (phase==='victory') {
-    const conf = Array.from({length:60},(_,i)=>i);
     return (
       <View style={[st.ctr,{backgroundColor:'#0A0A2E'}]}>
         <LinearGradient colors={['#0A0A2E','#1A1A4E','#2D1B69']} style={StyleSheet.absoluteFill}/>
-        {conf.map(i=><Animated.View key={i} style={{position:'absolute',left:Math.random()*SW,top:Math.random()*SH,width:8+Math.random()*10,height:8+Math.random()*10,backgroundColor:['#FFD700','#FF6B6B','#4ECDC4','#DDA0DD','#2ECC71'][i%5],borderRadius:Math.random()>0.5?10:2,opacity:0.7}}/>)}
-        <Animated.View style={[st.victBox,{transform:[{scale}]}]}>
-          <Text style={{fontSize:80}}>🏆</Text>
-          <Text style={st.victTitle}>AJOYIB! 🎉</Text>
-          <Text style={st.victSub}>{level.toUpperCase()} - Dars {lessonNum} tugatildi!</Text>
-        </Animated.View>
+        <VictoryOverlay
+          visible
+          title="AJOYIB!"
+          subtitle={`${level.toUpperCase()} • Dars ${lessonNum} tugatildi`}
+          icon="🏆"
+        />
       </View>
     );
   }
@@ -524,7 +531,5 @@ const st = StyleSheet.create({
   recallUz:{fontSize:36,fontWeight:'900',color:'#FFD700',marginVertical:12,textShadowColor:'rgba(255,215,0,0.3)',textShadowRadius:10,textShadowOffset:{width:0,height:2}},
   recallHint:{fontSize:14,color:'rgba(255,255,255,0.4)',marginBottom:8},
   // Victory
-  victBox:{alignItems:'center'},
-  victTitle:{fontSize:36,fontWeight:'900',color:'#FFD700',marginTop:16,letterSpacing:3},
-  victSub:{fontSize:16,color:'rgba(255,255,255,0.7)',marginTop:8,fontWeight:'600'},
+
 });

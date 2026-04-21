@@ -225,23 +225,70 @@ const locoStyles = StyleSheet.create({
 // ═══════════════════════════════════════════════
 // LESSON CAR COMPONENT (3D REALISTIC)
 // ═══════════════════════════════════════════════
-function LessonCar({ index, isUnlocked, isNewlyUnlocked, wheelSpin, levelColors, level, mascot }: {
+function LessonCar({ index, isUnlocked, isNewlyUnlocked, wheelSpin, levelColors, level, mascot, onLayoutX }: {
   index: number; isUnlocked: boolean; isNewlyUnlocked?: boolean; wheelSpin: Animated.AnimatedInterpolation<string>; levelColors: string[]; level: string; mascot: string;
+  onLayoutX?: (index: number, x: number) => void;
 }) {
   const pressScale = useRef(new Animated.Value(1)).current;
   const unlockScale = useRef(new Animated.Value(isNewlyUnlocked ? 0 : 1)).current;
+  const revealGlow = useRef(new Animated.Value(0)).current;
+  const sparkleProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isNewlyUnlocked) {
-      setTimeout(() => {
-        playSound('train'); // or some unlock sound
-        Animated.spring(unlockScale, {
+      const t = setTimeout(() => {
+        playSound('train');
+        Animated.sequence([
+          Animated.spring(unlockScale, {
+            toValue: 1.08,
+            friction: 4,
+            tension: 28,
+            useNativeDriver: true,
+          }),
+          Animated.spring(unlockScale, {
+            toValue: 1,
+            friction: 5,
+            tension: 40,
+            useNativeDriver: true,
+          }),
+        ]).start();
+
+        // Pulsing golden halo around the newly revealed wagon.
+        Animated.sequence([
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(revealGlow, {
+                toValue: 1,
+                duration: 700,
+                easing: Easing.inOut(Easing.sin),
+                useNativeDriver: true,
+              }),
+              Animated.timing(revealGlow, {
+                toValue: 0.25,
+                duration: 700,
+                easing: Easing.inOut(Easing.sin),
+                useNativeDriver: true,
+              }),
+            ]),
+            { iterations: 3 },
+          ),
+          Animated.timing(revealGlow, {
+            toValue: 0,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ]).start();
+
+        // Radial sparkle burst once wagon hits peak scale.
+        Animated.timing(sparkleProgress, {
           toValue: 1,
-          friction: 4,
-          tension: 20,
-          useNativeDriver: true
+          duration: 900,
+          delay: 200,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
         }).start();
-      }, 1000);
+      }, 900);
+      return () => clearTimeout(t);
     }
   }, [isNewlyUnlocked]);
 
@@ -283,6 +330,8 @@ function LessonCar({ index, isUnlocked, isNewlyUnlocked, wheelSpin, levelColors,
     router.push(`/lesson/${index}`);
   };
 
+  const sparkles = Array.from({ length: 8 }, (_, i) => i);
+
   return (
     <TouchableOpacity 
       activeOpacity={0.8} 
@@ -290,8 +339,88 @@ function LessonCar({ index, isUnlocked, isNewlyUnlocked, wheelSpin, levelColors,
       onPressIn={onPressIn}
       onPressOut={onPressOut}
       onPress={handlePress}
+      onLayout={(e) => onLayoutX && onLayoutX(index, e.nativeEvent.layout.x)}
     >
       <Animated.View style={[carStyles.wrapper, { transform: [{ scale: pressScale }, { scale: unlockScale }] }]}>
+        {/* Reveal halo + sparkles when newly unlocked */}
+        {isNewlyUnlocked && (
+          <>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                carStyles.revealHalo,
+                {
+                  opacity: revealGlow,
+                  transform: [
+                    {
+                      scale: revealGlow.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.85, 1.25],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={['rgba(255,215,0,0.65)', 'rgba(255,215,0,0.15)', 'transparent']}
+                style={[StyleSheet.absoluteFill, { borderRadius: 200 }]}
+                start={{ x: 0.5, y: 0.5 }}
+                end={{ x: 1, y: 1 }}
+              />
+            </Animated.View>
+            {sparkles.map((i) => {
+              const angle = (i / sparkles.length) * Math.PI * 2;
+              const dx = Math.cos(angle);
+              const dy = Math.sin(angle);
+              return (
+                <Animated.View
+                  key={i}
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    top: '35%',
+                    left: '50%',
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: '#FFE48A',
+                    shadowColor: '#FFD700',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.9,
+                    shadowRadius: 8,
+                    elevation: 6,
+                    opacity: sparkleProgress.interpolate({
+                      inputRange: [0, 0.2, 1],
+                      outputRange: [0, 1, 0],
+                    }),
+                    transform: [
+                      {
+                        translateX: sparkleProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, dx * 120],
+                        }),
+                      },
+                      {
+                        translateY: sparkleProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, dy * 120],
+                        }),
+                      },
+                      {
+                        scale: sparkleProgress.interpolate({
+                          inputRange: [0, 0.3, 1],
+                          outputRange: [0.4, 1.1, 0.3],
+                        }),
+                      },
+                    ],
+                  }}
+                />
+              );
+            })}
+          </>
+        )}
+
         {/* Mascot sitting on top of the wagon */}
         <View style={carStyles.mascotSlot}>
           <Mascot emoji={mascot} size={56} delay={index * 120} locked={!isUnlocked} />
@@ -384,18 +513,32 @@ const carStyles = StyleSheet.create({
   bottomHighlight: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '15%', backgroundColor: 'rgba(0,0,0,0.15)' },
   frame: { width: CAR_WIDTH - 10, height: 14, backgroundColor: '#222', borderRadius: 3, position: 'absolute', bottom: WHEEL_PROTRUDE - 2 },
   wheelRow: { position: 'absolute', bottom: 0, left: 30, right: 30, flexDirection: 'row', justifyContent: 'space-between' },
+  revealHalo: {
+    position: 'absolute',
+    top: CAR_HEIGHT * 0.05,
+    left: CAR_WIDTH * 0.05,
+    right: CAR_WIDTH * 0.05,
+    bottom: WHEEL_PROTRUDE,
+    borderRadius: 200,
+    zIndex: 0,
+  },
 });
 
 // ═══════════════════════════════════════════════
 // BOSS CAR COMPONENT (BIGGER, SPECIAL)
 // ═══════════════════════════════════════════════
-function BossCar({ wheelSpin, isUnlocked }: { wheelSpin: Animated.AnimatedInterpolation<string>; isUnlocked: boolean }) {
+function BossCar({ wheelSpin, isUnlocked, level, onLayoutX }: {
+  wheelSpin: Animated.AnimatedInterpolation<string>;
+  isUnlocked: boolean;
+  level: string;
+  onLayoutX?: (x: number) => void;
+}) {
   const pressScale = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
     if (!isUnlocked) return;
     playSound('click');
-    router.push('/exam');
+    router.push({ pathname: '/exam', params: { level } });
   };
 
   return (
@@ -405,6 +548,7 @@ function BossCar({ wheelSpin, isUnlocked }: { wheelSpin: Animated.AnimatedInterp
       onPressIn={() => isUnlocked && Animated.spring(pressScale, { toValue: 0.95, friction: 5, useNativeDriver: true }).start()}
       onPressOut={() => Animated.spring(pressScale, { toValue: 1, friction: 5, useNativeDriver: true }).start()}
       onPress={handlePress}
+      onLayout={(e) => onLayoutX && onLayoutX(e.nativeEvent.layout.x)}
     >
       <Animated.View style={[bossStyles.wrapper, { transform: [{ scale: pressScale }] }]}>
         {/* Mascot sitting on top (boss mascot) */}
@@ -531,8 +675,13 @@ const trackStyles = StyleSheet.create({
 export default function DashboardScreen() {
   const params = useLocalSearchParams();
   const newlyUnlockedLesson = params.unlockedLesson ? parseInt(params.unlockedLesson as string, 10) : null;
+  const levelUp = (params.levelUp as string) || null;
 
   const [userData, setUserData] = useState<UserData | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const wagonXRef = useRef<Record<number, number>>({});
+  const bossXRef = useRef<number | null>(null);
+  const didAutoScrollRef = useRef(false);
 
   // Animation values
   const trainEntry = useRef(new Animated.Value(SCREEN_W + 200)).current;
@@ -540,6 +689,41 @@ export default function DashboardScreen() {
   const headerSlide = useRef(new Animated.Value(-60)).current;
   const headerFade = useRef(new Animated.Value(0)).current;
   const settingsRotate = useRef(new Animated.Value(0)).current;
+
+  /**
+   * Called from each wagon once its layout is measured. As soon as
+   * we know the target wagon's x-offset, we animate the scroll view
+   * so the newly unlocked wagon is centered on screen. Runs exactly
+   * once per mount.
+   */
+  const scrollToTarget = () => {
+    if (didAutoScrollRef.current) return;
+    if (newlyUnlockedLesson == null) return;
+
+    let targetX: number | undefined;
+    if (newlyUnlockedLesson > TOTAL_LESSONS) {
+      if (bossXRef.current != null) targetX = bossXRef.current;
+    } else if (wagonXRef.current[newlyUnlockedLesson] != null) {
+      targetX = wagonXRef.current[newlyUnlockedLesson];
+    }
+
+    if (targetX == null) return;
+    didAutoScrollRef.current = true;
+
+    const centered = Math.max(0, targetX - (SCREEN_W - CAR_WIDTH) / 2);
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ x: centered, y: 0, animated: true });
+    }, 650);
+  };
+
+  const onWagonLayout = (index: number, x: number) => {
+    wagonXRef.current[index] = x;
+    scrollToTarget();
+  };
+  const onBossLayout = (x: number) => {
+    bossXRef.current = x;
+    scrollToTarget();
+  };
 
   const vibes: Record<string, { backdrop: BackdropVariant; carColors: string[]; text: string }> = {
     beginner: {
@@ -656,6 +840,7 @@ export default function DashboardScreen() {
         <RailroadTrack />
 
         <ScrollView
+          ref={scrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -681,16 +866,133 @@ export default function DashboardScreen() {
                   levelColors={vibe.carColors}
                   level={level}
                   mascot={mascot}
+                  onLayoutX={onWagonLayout}
                 />
               );
             })}
-            <BossCar wheelSpin={wheelSpin} isUnlocked={(userData?.progress || 1) > TOTAL_LESSONS} />
+            <BossCar
+              wheelSpin={wheelSpin}
+              isUnlocked={(userData?.progress || 1) > TOTAL_LESSONS}
+              level={level}
+              onLayoutX={onBossLayout}
+            />
           </Animated.View>
         </ScrollView>
       </View>
+
+      {/* Level-up banner overlay (shown briefly when exam promotes the user) */}
+      {levelUp ? <LevelUpBanner targetLevel={levelUp} /> : null}
     </View>
   );
 }
+
+// ═══════════════════════════════════════════════
+// LEVEL-UP BANNER (shown after exam transitions)
+// ═══════════════════════════════════════════════
+function LevelUpBanner({ targetLevel }: { targetLevel: string }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.85)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 5, tension: 60, useNativeDriver: true }),
+      ]),
+      Animated.timing(shimmer, {
+        toValue: 1,
+        duration: 1400,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.delay(1500),
+      Animated.timing(opacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start(() => setHidden(true));
+  }, []);
+
+  if (hidden) return null;
+
+  const shimmerX = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-120, 220] });
+  const label = targetLevel.toUpperCase();
+
+  return (
+    <Animated.View pointerEvents="none" style={[bannerStyles.overlay, { opacity }]}>
+      <Animated.View style={[bannerStyles.card, { transform: [{ scale }] }]}>
+        <LinearGradient
+          colors={['#FFD700', '#FFA500', '#FFD700']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <Animated.View
+          style={[
+            bannerStyles.shine,
+            { transform: [{ translateX: shimmerX }, { rotate: '18deg' }] },
+          ]}
+        />
+        <Text style={bannerStyles.kicker}>YANGI BOSQICH</Text>
+        <Text style={bannerStyles.title}>{label}</Text>
+        <Text style={bannerStyles.subtitle}>ochildi!</Text>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+const bannerStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  card: {
+    paddingHorizontal: 40,
+    paddingVertical: 22,
+    borderRadius: 22,
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.6)',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 24,
+    elevation: 20,
+  },
+  shine: {
+    position: 'absolute',
+    top: -30,
+    left: 0,
+    width: 80,
+    height: 160,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  kicker: {
+    fontSize: 12,
+    color: 'rgba(0,0,0,0.55)',
+    letterSpacing: 4,
+    fontWeight: '800',
+  },
+  title: {
+    fontSize: 46,
+    fontWeight: '900',
+    color: '#1B1B1B',
+    letterSpacing: 6,
+    marginTop: 4,
+    textShadowColor: 'rgba(255,255,255,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: 'rgba(0,0,0,0.7)',
+    fontWeight: '700',
+    letterSpacing: 3,
+    marginTop: 2,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

@@ -1,18 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, useWindowDimensions } from 'react-native';
-import { router } from 'expo-router';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  useWindowDimensions,
+} from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
+import * as Speech from 'expo-speech';
 import { playSound } from '../utils/soundProvider';
-import { API } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const wordsDB: WordsEntry[] = require('../assets/data/words.json');
+import VictoryOverlay from '../components/VictoryOverlay';
+
+type Word = { en: string; uz: string };
+type WordsEntry = { level: string; lesson: number; words: Word[] };
 
 const ALL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-// Letter phonetics map for matching
+// Phonetic matcher for single-letter utterances (beginner exam).
 const LETTER_PHONETICS: Record<string, string[]> = {
   a: ['a', 'ay', 'hey', 'eh', 'aye', 'aa', 'ah'],
   b: ['b', 'be', 'bee', 'bees', 'beef', 'beat'],
@@ -42,126 +55,134 @@ const LETTER_PHONETICS: Record<string, string[]> = {
   z: ['z', 'zee', 'zed', 'ze', 'said', 'set', 'sit'],
 };
 
-// Confetti
-function ConfettiPiece({ delay, x, screenH, screenW }: { delay: number; x: number; screenH: number; screenW: number }) {
-  const translateY = useRef(new Animated.Value(-60)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
-  const rotate = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-  const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#FF5733', '#C70039'];
-  const color = colors[Math.floor(Math.random() * colors.length)];
-  const size = 8 + Math.random() * 14;
-  const isCircle = Math.random() > 0.5;
+const normalize = (t: string) =>
+  t.toLowerCase().trim().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ');
 
-  useEffect(() => {
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(translateY, { toValue: screenH + 100, duration: 3000 + Math.random() * 2000, useNativeDriver: true }),
-        Animated.timing(translateX, { toValue: (Math.random() - 0.5) * 200, duration: 3000, useNativeDriver: true }),
-        Animated.timing(rotate, { toValue: 1, duration: 2000 + Math.random() * 1000, useNativeDriver: true }),
-        Animated.sequence([
-          Animated.delay(2500),
-          Animated.timing(opacity, { toValue: 0, duration: 500, useNativeDriver: true }),
-        ]),
-      ]).start();
-    }, delay);
-  }, []);
+const cleanTranscript = (text: string): string =>
+  text.replace(/\benglish\b/gi, '').replace(/\s+/g, ' ').trim();
 
-  const spin = rotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '720deg'] });
-
-  return (
-    <Animated.View style={{
-      position: 'absolute', left: x, top: 0,
-      width: size, height: size * (isCircle ? 1 : 0.6),
-      backgroundColor: color,
-      borderRadius: isCircle ? size / 2 : 2,
-      transform: [{ translateY }, { translateX }, { rotate: spin }],
-      opacity,
-    }} />
-  );
-}
-
-// Firework burst
-function FireworkBurst({ x, y, delay }: { x: number; y: number; delay: number }) {
-  const particles = Array.from({ length: 12 }, (_, i) => {
-    const angle = (i / 12) * Math.PI * 2;
-    return { tx: Math.cos(angle) * 120, ty: Math.sin(angle) * 120 };
+const similarity = (a: string, b: string): number => {
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (na === nb) return 1;
+  if (na.length < 2 || nb.length < 2) {
+    if (na.includes(nb) || nb.includes(na)) return 0.8;
+    return 0;
+  }
+  const bigrams = (s: string) => {
+    const m = new Map<string, number>();
+    for (let i = 0; i < s.length - 1; i++) {
+      const bi = s.substring(i, i + 2);
+      m.set(bi, (m.get(bi) || 0) + 1);
+    }
+    return m;
+  };
+  const b1 = bigrams(na);
+  const b2 = bigrams(nb);
+  let mt = 0;
+  b1.forEach((c, bi) => {
+    mt += Math.min(c, b2.get(bi) || 0);
   });
-  const scale = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#FF5733', '#DDA0DD'];
+  return (2 * mt) / (na.length - 1 + nb.length - 1);
+};
 
-  useEffect(() => {
-    setTimeout(() => {
-      Animated.sequence([
-        Animated.parallel([
-          Animated.spring(scale, { toValue: 1, friction: 4, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        ]),
-        Animated.timing(opacity, { toValue: 0, duration: 800, useNativeDriver: true }),
-      ]).start();
-    }, delay);
-  }, []);
-
-  return (
-    <>
-      {particles.map((p, i) => (
-        <Animated.View key={i} style={{
-          position: 'absolute', left: x, top: y,
-          width: 6, height: 6, borderRadius: 3,
-          backgroundColor: colors[i % colors.length],
-          opacity,
-          transform: [
-            { translateX: Animated.multiply(scale, p.tx) as any },
-            { translateY: Animated.multiply(scale, p.ty) as any },
-            { scale: Animated.subtract(1, Animated.multiply(scale, 0.5)) as any },
-          ],
-        }} />
-      ))}
-    </>
-  );
+function shuffle<T>(arr: T[]): T[] {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
+
+// Word pool builder: for A1 exam pull words across all A1 lessons;
+// for A2 pull across both A1 + A2 lessons. Ensures every lesson is
+// represented (2 random words / lesson) for reasonable test length.
+function buildWordPool(level: 'a1' | 'a2'): Word[] {
+  const srcLevels = level === 'a1' ? ['A1'] : ['A1', 'A2'];
+  const perLesson = 2;
+  const pool: Word[] = [];
+  for (const lv of srcLevels) {
+    const entries = wordsDB.filter((e) => e.level.toUpperCase() === lv);
+    entries.sort((a, b) => a.lesson - b.lesson);
+    for (const entry of entries) {
+      const picks = shuffle(entry.words).slice(0, perLesson);
+      pool.push(...picks);
+    }
+  }
+  // Deduplicate by english word (case-insensitive).
+  const seen = new Set<string>();
+  const unique = pool.filter((w) => {
+    const k = w.en.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return shuffle(unique);
+}
+
+type Mode = 'letters' | 'words';
+type Item = { kind: 'letter'; letter: string } | { kind: 'word'; word: Word };
 
 export default function ExamScreen() {
-  const { width: SW, height: SH } = useWindowDimensions();
+  const params = useLocalSearchParams();
+  const { width: SW } = useWindowDimensions();
+
+  const [userLevel, setUserLevel] = useState<string>('beginner');
+  const examLevel = String(params.level || userLevel || 'beginner').toLowerCase();
+  const mode: Mode = examLevel === 'beginner' ? 'letters' : 'words';
+
+  const [items, setItems] = useState<Item[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recognizedText, setRecognizedText] = useState('');
   const [feedback, setFeedback] = useState<'none' | 'success' | 'fail'>('none');
-  const [failCount, setFailCount] = useState(0);
   const [isChecking, setIsChecking] = useState(false);
   const [isVictory, setIsVictory] = useState(false);
 
   const currentIndexRef = useRef(0);
   const isCheckingRef = useRef(false);
-  const failCountRef = useRef(0);
 
   const itemScale = useRef(new Animated.Value(0)).current;
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
   const micScale = useRef(new Animated.Value(1)).current;
+  const lastInterimRef = useRef<string>('');
 
-  // Victory animations
-  const victoryScale = useRef(new Animated.Value(0)).current;
-  const victoryRotate = useRef(new Animated.Value(0)).current;
-  const starScale = useRef(new Animated.Value(0)).current;
-  const badgeSlide = useRef(new Animated.Value(100)).current;
-  const badgeOpacity = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
+  // Load user level + build items.
   useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('user_data');
+        if (raw) {
+          const u = JSON.parse(raw);
+          setUserLevel((u.level || 'beginner').toLowerCase());
+        }
+      } catch (_) {}
+    })();
     ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    animateItemIn();
   }, []);
 
-  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
-  useEffect(() => { isCheckingRef.current = isChecking; }, [isChecking]);
-  useEffect(() => { failCountRef.current = failCount; }, [failCount]);
+  // Build items once we know the resolved level.
+  useEffect(() => {
+    let next: Item[];
+    if (mode === 'letters') {
+      next = ALL_LETTERS.map((l) => ({ kind: 'letter', letter: l }));
+    } else {
+      const pool = buildWordPool(examLevel === 'a2' ? 'a2' : 'a1');
+      next = pool.map((w) => ({ kind: 'word', word: w }));
+    }
+    setItems(next);
+    setCurrentIndex(0);
+    currentIndexRef.current = 0;
+    animateItemIn();
+  }, [mode, examLevel]);
 
-  const normalize = (t: string) => t.toLowerCase().trim().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ');
-
-  const cleanTranscript = (text: string): string => {
-    return text.replace(/\benglish\b/gi, '').replace(/\s+/g, ' ').trim();
-  };
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+  useEffect(() => {
+    isCheckingRef.current = isChecking;
+  }, [isChecking]);
 
   const matchesLetter = (recognized: string, letter: string): boolean => {
     const nr = normalize(recognized);
@@ -169,21 +190,45 @@ export default function ExamScreen() {
     const phonetics = LETTER_PHONETICS[ll] || [ll];
     for (const v of phonetics) {
       if (nr === v || nr.includes(v)) return true;
-      if (nr.split(' ').some(w => w === v)) return true;
+      if (nr.split(' ').some((w) => w === v)) return true;
     }
     if (nr.includes(ll)) return true;
     return false;
   };
 
-  // Track best interim so we can fall back if final never arrives.
-  const lastInterimRef = useRef<string>('');
+  const matchesWord = (recognized: string, expected: string): boolean => {
+    const nr = normalize(recognized);
+    const ne = normalize(expected);
+    if (!nr) return false;
+    if (nr === ne) return true;
+    if (nr.includes(ne) || ne.includes(nr)) return true;
+    return similarity(recognized, expected) >= 0.5;
+  };
 
-  // Speech events
+  const pickBest = (candidates: string[], expected: string, isLetter: boolean): string => {
+    if (!candidates.length) return '';
+    let best = candidates[0];
+    let bestScore = -1;
+    for (const c of candidates) {
+      const score = isLetter
+        ? matchesLetter(c, expected)
+          ? 1
+          : 0
+        : (normalize(c).includes(normalize(expected)) ||
+            normalize(expected).includes(normalize(c)))
+          ? 1
+          : similarity(c, expected);
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    return best;
+  };
+
   useSpeechRecognitionEvent('result', (event) => {
-    const allTranscripts = event.results
-      .map((r) => r?.transcript ?? '')
-      .filter((t) => t.length > 0);
-    const raw = allTranscripts[0] ?? '';
+    const all = event.results.map((r) => r?.transcript ?? '').filter((t) => t.length > 0);
+    const raw = all[0] ?? '';
     const cleaned = cleanTranscript(raw);
     setRecognizedText(cleaned || raw);
     if (cleaned) lastInterimRef.current = cleaned;
@@ -194,29 +239,31 @@ export default function ExamScreen() {
       setIsRecording(false);
       Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
 
-      const letter = ALL_LETTERS[currentIndexRef.current];
-      if (letter) {
-        // Try every alternative against the expected letter
-        const candidates = allTranscripts.map(cleanTranscript);
-        const chosen = candidates.find((c) => matchesLetter(c, letter)) ?? candidates[0] ?? cleaned;
-        checkPronunciation(chosen, letter);
+      const item = items[currentIndexRef.current];
+      if (!item) return;
+      if (item.kind === 'letter') {
+        const candidates = all.map(cleanTranscript);
+        const chosen = pickBest(candidates, item.letter, true);
+        checkResult(chosen || cleaned);
+      } else {
+        const candidates = all.map(cleanTranscript);
+        const chosen = pickBest(candidates, item.word.en, false);
+        checkResult(chosen || cleaned);
       }
     }
   });
 
   useSpeechRecognitionEvent('error', (event) => {
     console.warn('[exam] speech error:', event.error, event.message);
-    const letter = ALL_LETTERS[currentIndexRef.current];
     const interim = lastInterimRef.current;
     if (
       !isCheckingRef.current &&
-      letter &&
       interim &&
       (event.error === 'no-speech' || event.error === 'speech-timeout')
     ) {
       isCheckingRef.current = true;
       setIsChecking(true);
-      checkPronunciation(interim, letter);
+      checkResult(interim);
     }
     setIsRecording(false);
     Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
@@ -229,12 +276,18 @@ export default function ExamScreen() {
 
   const animateItemIn = () => {
     itemScale.setValue(0);
-    Animated.spring(itemScale, { toValue: 1, friction: 5, tension: 40, useNativeDriver: true }).start();
-    // NO auto-speak in exam mode!
+    Animated.spring(itemScale, {
+      toValue: 1,
+      friction: 5,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
   };
 
   const startRecording = async () => {
     if (isChecking) return;
+    const item = items[currentIndex];
+    if (!item) return;
     try {
       setIsRecording(true);
       setRecognizedText('');
@@ -243,8 +296,10 @@ export default function ExamScreen() {
       playSound('click');
       Animated.spring(micScale, { toValue: 1.5, useNativeDriver: true }).start();
 
-      const letter = ALL_LETTERS[currentIndex];
-      const phonetics = LETTER_PHONETICS[letter.toLowerCase()] || [];
+      const ctx: string[] =
+        item.kind === 'letter'
+          ? [item.letter, ...(LETTER_PHONETICS[item.letter.toLowerCase()] || [])]
+          : [item.word.en];
 
       lastInterimRef.current = '';
       ExpoSpeechRecognitionModule.start({
@@ -252,8 +307,7 @@ export default function ExamScreen() {
         interimResults: true,
         continuous: false,
         maxAlternatives: 5,
-        contextualStrings: [letter, ...phonetics],
-        // Critical for recognising single letters on Android.
+        contextualStrings: ctx,
         androidIntentOptions: {
           EXTRA_LANGUAGE_MODEL: 'web_search',
           EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
@@ -269,25 +323,28 @@ export default function ExamScreen() {
   };
 
   const stopRecording = () => {
-    try { ExpoSpeechRecognitionModule.stop(); } catch (_) {}
+    try {
+      ExpoSpeechRecognitionModule.stop();
+    } catch (_) {}
   };
 
-  const checkPronunciation = (recognized: string, letter: string) => {
-    const isMatch = matchesLetter(recognized, letter);
-    console.log(`[Exam] expected="${letter}" recognized="${recognized}" match=${isMatch}`);
+  const checkResult = (recognized: string) => {
+    const item = items[currentIndexRef.current];
+    if (!item) return;
+    const ok =
+      item.kind === 'letter'
+        ? matchesLetter(recognized, item.letter)
+        : matchesWord(recognized, item.word.en);
 
-    if (isMatch) {
+    if (ok) {
       showFeedback('success');
       playSound('success');
       setTimeout(() => {
         setIsChecking(false);
         isCheckingRef.current = false;
-        handleNext();
+        advance();
       }, 1000);
     } else {
-      const nf = failCountRef.current + 1;
-      setFailCount(nf);
-      failCountRef.current = nf;
       showFeedback('fail');
       playSound('error');
       setIsChecking(false);
@@ -305,10 +362,16 @@ export default function ExamScreen() {
     ]).start(() => setFeedback('none'));
   };
 
-  const handleNext = () => {
-    setFailCount(0);
+  const speakCurrent = () => {
+    const item = items[currentIndexRef.current];
+    if (!item) return;
+    const text = item.kind === 'letter' ? item.letter : item.word.en;
+    Speech.speak(text, { language: 'en-US', rate: 0.75, pitch: 1.0 });
+  };
+
+  const advance = () => {
     const next = currentIndexRef.current + 1;
-    if (next < ALL_LETTERS.length) {
+    if (next < items.length) {
       currentIndexRef.current = next;
       setCurrentIndex(next);
       animateItemIn();
@@ -317,203 +380,278 @@ export default function ExamScreen() {
     }
   };
 
+  /**
+   * On success: advance the user's level. beginner→a1, a1→a2.
+   * A2 exam is the final one — we mark progress past 13 but keep level=a2.
+   */
   const handleVictory = async () => {
     setIsVictory(true);
     playSound('victory');
 
-    // Epic animation sequence
-    Animated.sequence([
-      Animated.spring(victoryScale, { toValue: 1, friction: 3, tension: 15, useNativeDriver: true }),
-      Animated.parallel([
-        Animated.spring(starScale, { toValue: 1, friction: 4, tension: 20, useNativeDriver: true }),
-        Animated.timing(victoryRotate, { toValue: 1, duration: 1500, useNativeDriver: true }),
-      ]),
-      Animated.parallel([
-        Animated.spring(badgeSlide, { toValue: 0, friction: 5, tension: 30, useNativeDriver: true }),
-        Animated.timing(badgeOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-      ]),
-    ]).start();
-
-    // Pulsing glow
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-
-    // Update level to A1, reset progress for new level
+    let nextLevel: string | null = null;
     try {
-      const userStr = await AsyncStorage.getItem('user_data');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        user.level = 'a1';
-        user.progress = 1; // Reset progress for the new level
-        await AsyncStorage.setItem('user_data', JSON.stringify(user));
-        await API.syncUser({ name: user.name, age: user.age, level: 'a1' });
-        await API.updateProgress(1);
+      const raw = await AsyncStorage.getItem('user_data');
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (examLevel === 'beginner') {
+          nextLevel = 'a1';
+          u.level = 'a1';
+          u.progress = 1;
+        } else if (examLevel === 'a1') {
+          nextLevel = 'a2';
+          u.level = 'a2';
+          u.progress = 1;
+        } else {
+          // A2 is the final stage — keep level, mark as graduated.
+          nextLevel = null;
+          u.level = 'a2';
+          u.progress = 14;
+        }
+        await AsyncStorage.setItem('user_data', JSON.stringify(u));
       }
     } catch (e) {
       console.error('Failed to update level', e);
     }
 
+    // Give the victory overlay time to breathe, then return to
+    // dashboard. Pass `unlockedLesson=1` when the level changes so
+    // dashboard auto-scrolls to the first wagon of the new level and
+    // plays its reveal animation.
     setTimeout(() => {
-      router.replace('/dashboard');
-    }, 8000);
+      if (nextLevel) {
+        router.replace({
+          pathname: '/dashboard',
+          params: { unlockedLesson: '1', levelUp: nextLevel },
+        });
+      } else {
+        router.replace('/dashboard');
+      }
+    }, 4200);
   };
 
-  if (isVictory) {
-    const confetti = Array.from({ length: 120 }, (_, i) => ({
-      id: i, x: Math.random() * SW, delay: Math.random() * 2000,
-    }));
-    const fireworks = [
-      { x: SW * 0.2, y: SH * 0.15, delay: 500 },
-      { x: SW * 0.8, y: SH * 0.2, delay: 1200 },
-      { x: SW * 0.5, y: SH * 0.1, delay: 2000 },
-      { x: SW * 0.3, y: SH * 0.25, delay: 2800 },
-      { x: SW * 0.7, y: SH * 0.15, delay: 3500 },
-    ];
-    const spin = victoryRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const item = items[currentIndex];
+  const progress = items.length ? (currentIndex / items.length) * 100 : 0;
 
-    return (
-      <View style={[s.container, { backgroundColor: '#0A0A2E', overflow: 'hidden' }]}>
-        <LinearGradient colors={['#0A0A2E', '#1A1A4E', '#2D1B69']} style={StyleSheet.absoluteFill} />
-
-        {confetti.map(c => (
-          <ConfettiPiece key={c.id} x={c.x} delay={c.delay} screenH={SH} screenW={SW} />
-        ))}
-        {fireworks.map((f, i) => (
-          <FireworkBurst key={i} {...f} />
-        ))}
-
-        <View style={s.victoryCenter}>
-          {/* Big trophy */}
-          <Animated.View style={{ transform: [{ scale: victoryScale }] }}>
-            <Animated.Text style={[s.victoryEmoji, { transform: [{ rotate: spin }] }]}>🏆</Animated.Text>
-          </Animated.View>
-
-          {/* Stars */}
-          <Animated.View style={[s.starsRow, { transform: [{ scale: starScale }] }]}>
-            <Text style={s.starEmoji}>⭐</Text>
-            <Text style={[s.starEmoji, { fontSize: 50, marginBottom: 10 }]}>🌟</Text>
-            <Text style={s.starEmoji}>⭐</Text>
-          </Animated.View>
-
-          {/* Congratulations text */}
-          <Animated.View style={[s.congratsBox, { transform: [{ scale: Animated.multiply(victoryScale, pulseAnim) }] }]}>
-            <Text style={s.congratsTitle}>TABRIKLAYMIZ! 🎉</Text>
-            <Text style={s.congratsSubtitle}>Siz BEGINNER darajasini tugatdingiz!</Text>
-          </Animated.View>
-
-          {/* A1 Badge */}
-          <Animated.View style={[s.a1Badge, { transform: [{ translateY: badgeSlide }, { scale: pulseAnim }], opacity: badgeOpacity }]}>
-            <LinearGradient colors={['#FFD700', '#FFA500', '#FF8C00']} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
-            <Text style={s.a1Text}>A1</Text>
-            <Text style={s.a1Label}>YANGI DARAJA</Text>
-          </Animated.View>
-        </View>
-      </View>
-    );
-  }
-
-  const currentLetter = ALL_LETTERS[currentIndex];
-  const progress = ((currentIndex) / ALL_LETTERS.length) * 100;
+  // ── Victory overlay state ─────────────────────────────────────────
+  const victoryConfig = (() => {
+    if (examLevel === 'beginner') {
+      return {
+        title: "TABRIKLAYMIZ!",
+        subtitle: "Beginner darajasi tugadi — A1 boshlanmoqda",
+        badge: 'A1',
+      };
+    }
+    if (examLevel === 'a1') {
+      return {
+        title: 'TABRIKLAYMIZ!',
+        subtitle: 'A1 darajasi tugadi — A2 boshlanmoqda',
+        badge: 'A2',
+      };
+    }
+    return {
+      title: 'AJOYIB!',
+      subtitle: 'Siz A2 darajasini ham tugatdingiz',
+      badge: null as string | null,
+    };
+  })();
 
   return (
     <LinearGradient colors={['#1A0A2E', '#2D1B69', '#4A235A']} style={s.container}>
-      {/* Header */}
       <View style={s.header}>
-        <Text style={s.headerTitle}>📝 IMTIHON</Text>
-        <Text style={s.headerSub}>{currentIndex + 1} / {ALL_LETTERS.length}</Text>
+        <Text style={s.headerTitle}>
+          📝 {examLevel === 'beginner' ? 'IMTIHON' : `${examLevel.toUpperCase()} IMTIHON`}
+        </Text>
+        <Text style={s.headerSub}>
+          {items.length ? `${currentIndex + 1} / ${items.length}` : '…'}
+        </Text>
       </View>
 
-      {/* Progress */}
       <View style={s.progressWrap}>
         <View style={[s.progressBar, { width: `${progress}%` }]} />
       </View>
 
       <View style={s.content}>
-        {/* Letter Card — NO replay button */}
-        <Animated.View style={[s.letterCard, { transform: [{ scale: itemScale }] }]}>
-          <Text style={s.letterText} adjustsFontSizeToFit numberOfLines={1}>{currentLetter}</Text>
-        </Animated.View>
+        {/* Prompt card */}
+        {item ? (
+          <Animated.View style={[s.letterCard, { transform: [{ scale: itemScale }] }]}>
+            {item.kind === 'letter' ? (
+              <Text style={s.letterText} adjustsFontSizeToFit numberOfLines={1}>
+                {item.letter}
+              </Text>
+            ) : (
+              <View style={{ alignItems: 'center', padding: 12 }}>
+                <Text style={s.wordUz} adjustsFontSizeToFit numberOfLines={2}>
+                  🇺🇿 {item.word.uz}
+                </Text>
+                <Text style={s.wordHint}>Inglizchasini ayting</Text>
+                <TouchableOpacity style={s.listenBtn} onPress={speakCurrent}>
+                  <Text style={{ fontSize: 26 }}>🔊</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </Animated.View>
+        ) : null}
 
         <View style={s.rightPanel}>
-          {/* Feedback */}
           <Animated.View style={[s.feedbackBox, { opacity: feedbackOpacity }]}>
             {feedback === 'success' ? (
-              <Text style={s.successText}>To'g'ri! ⭐</Text>
+              <Text style={s.successText}>To&apos;g&apos;ri! ⭐</Text>
             ) : feedback === 'fail' ? (
-              <Text style={s.failText}>Noto'g'ri! 🔄</Text>
+              <Text style={s.failText}>Noto&apos;g&apos;ri! 🔄</Text>
             ) : (
               <Text style={s.placeholderText}> </Text>
             )}
           </Animated.View>
 
-          {/* Mic */}
           <View style={s.micArea}>
-            <TouchableOpacity onPressIn={startRecording} onPressOut={stopRecording} activeOpacity={0.9}>
-              <Animated.View style={[s.micBtn, isRecording && s.micBtnRec, { transform: [{ scale: micScale }] }]}>
+            <TouchableOpacity
+              onPressIn={startRecording}
+              onPressOut={stopRecording}
+              activeOpacity={0.9}
+            >
+              <Animated.View
+                style={[
+                  s.micBtn,
+                  isRecording && s.micBtnRec,
+                  { transform: [{ scale: micScale }] },
+                ]}
+              >
                 <Text style={s.micIcon}>🎙️</Text>
               </Animated.View>
             </TouchableOpacity>
             <Text style={s.micText}>
-              {isChecking ? "Tekshirilmoqda..." : isRecording ? "Eshitilmoqda..." : "Bosib turib ayting"}
+              {isChecking
+                ? 'Tekshirilmoqda...'
+                : isRecording
+                  ? 'Eshitilmoqda...'
+                  : 'Bosib turib ayting'}
             </Text>
-            {recognizedText ? <Text style={s.recText}>"{recognizedText}"</Text> : null}
+            {recognizedText ? (
+              <Text style={s.recText}>&quot;{recognizedText}&quot;</Text>
+            ) : null}
           </View>
         </View>
       </View>
+
+      <VictoryOverlay
+        visible={isVictory}
+        title={victoryConfig.title}
+        subtitle={victoryConfig.subtitle}
+        badge={victoryConfig.badge}
+        icon="🏆"
+      />
     </LinearGradient>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 30, paddingTop: 16 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+    paddingTop: 16,
+  },
   headerTitle: { fontSize: 22, fontWeight: '900', color: '#FFD700', letterSpacing: 2 },
   headerSub: { fontSize: 18, fontWeight: '700', color: 'rgba(255,255,255,0.7)' },
-  progressWrap: { height: 8, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 30, marginTop: 10, borderRadius: 4, overflow: 'hidden' },
-  progressBar: { height: '100%', backgroundColor: '#FFD700', borderRadius: 4 },
-  content: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', padding: 20 },
-  letterCard: {
-    width: '40%', height: '75%',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 30, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: '#FFD700',
-    shadowColor: '#FFD700', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 10,
+  progressWrap: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    marginHorizontal: 30,
+    marginTop: 10,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
-  letterText: { fontSize: 140, fontWeight: '900', color: '#FFF', textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 15, textAlign: 'center' },
+  progressBar: { height: '100%', backgroundColor: '#FFD700', borderRadius: 4 },
+  content: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    padding: 20,
+  },
+  letterCard: {
+    width: '45%',
+    height: '75%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFD700',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  letterText: {
+    fontSize: 140,
+    fontWeight: '900',
+    color: '#FFF',
+    textShadowColor: 'rgba(255,215,0,0.5)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 15,
+    textAlign: 'center',
+  },
+  wordUz: {
+    fontSize: 40,
+    fontWeight: '900',
+    color: '#FFF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 8,
+  },
+  wordHint: {
+    marginTop: 18,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  listenBtn: {
+    marginTop: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,215,0,0.6)',
+  },
   rightPanel: { width: '45%', height: '80%', alignItems: 'center', justifyContent: 'center' },
-  feedbackBox: { height: 50, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center', borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.5)' },
+  feedbackBox: {
+    height: 50,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
   placeholderText: { fontSize: 20 },
   successText: { color: '#2ECC71', fontSize: 24, fontWeight: 'bold' },
-  failText: { color: '#E74C3C', fontSize: 22, fontWeight: 'bold' },
-  micArea: { alignItems: 'center', marginTop: 30 },
+  failText: { color: '#E74C3C', fontSize: 24, fontWeight: 'bold' },
+  micArea: { alignItems: 'center', marginTop: 24 },
   micBtn: {
-    width: 110, height: 110, borderRadius: 55,
-    backgroundColor: '#8E44AD', alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#8E44AD', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 15, elevation: 10,
-    borderWidth: 4, borderColor: '#6C3483',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: '#8E44AD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#FFD700',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 14,
   },
-  micBtnRec: { backgroundColor: '#E74C3C', borderColor: '#C0392B', shadowColor: '#E74C3C' },
-  micIcon: { fontSize: 45 },
-  micText: { marginTop: 16, color: 'rgba(255,255,255,0.8)', fontSize: 16, fontWeight: '600' },
-  recText: { marginTop: 8, color: 'rgba(255,255,255,0.4)', fontSize: 13, fontStyle: 'italic', textAlign: 'center' },
-  // Victory
-  victoryCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  victoryEmoji: { fontSize: 100 },
-  starsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  starEmoji: { fontSize: 36 },
-  congratsBox: { marginTop: 20, alignItems: 'center' },
-  congratsTitle: { fontSize: 38, fontWeight: '900', color: '#FFD700', textShadowColor: 'rgba(255,215,0,0.5)', textShadowRadius: 20, textShadowOffset: { width: 0, height: 3 }, letterSpacing: 3 },
-  congratsSubtitle: { fontSize: 18, color: 'rgba(255,255,255,0.8)', marginTop: 8, fontWeight: '600' },
-  a1Badge: {
-    marginTop: 30, width: 120, height: 120, borderRadius: 60,
-    justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
-    borderWidth: 4, borderColor: '#FFF',
-    shadowColor: '#FFD700', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 30, elevation: 20,
-  },
-  a1Text: { fontSize: 42, fontWeight: '900', color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 2 } },
-  a1Label: { fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.9)', letterSpacing: 2 },
+  micBtnRec: { backgroundColor: '#C0392B', borderColor: '#FF6B6B' },
+  micIcon: { fontSize: 48 },
+  micText: { marginTop: 14, fontSize: 16, color: '#FFF', fontWeight: '700' },
+  recText: { marginTop: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' },
 });
