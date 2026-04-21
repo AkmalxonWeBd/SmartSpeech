@@ -1,74 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { useVideoPlayer, VideoView, VideoPlayerStatus } from 'expo-video';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as FileSystem from 'expo-file-system/legacy';
-import { getCachedUri } from '../utils/assetManager';
-import { API } from '../utils/api';
+import { getAssetModule } from '../utils/assetManager';
 
 const VIDEO_FILE = 'harflar.mp4';
 
 export default function IntroVideoScreen() {
   const { nextRoute, canSkip } = useLocalSearchParams();
-  const [videoUri, setVideoUri] = useState<string | null>(null);
-
-  // Lokal keshda bo'lsa — shundan, bo'lmasa to'g'ridan-to'g'ri serverdan stream.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const remoteUri = API.getAssetUrl('videos', VIDEO_FILE);
-      try {
-        const localUri = getCachedUri('videos', VIDEO_FILE);
-        const info = await FileSystem.getInfoAsync(localUri);
-        if (cancelled) return;
-        const resolved = info.exists ? localUri : remoteUri;
-        console.log('[IntroVideo] using', resolved);
-        setVideoUri(resolved);
-      } catch (e) {
-        console.warn('[IntroVideo] resolve failed, falling back to remote', e);
-        if (!cancelled) setVideoUri(remoteUri);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const handleFinish = () => {
-    if (nextRoute) router.replace(nextRoute as any);
-    else router.back();
-  };
-
-  if (!videoUri) {
-    return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.loadingText}>Video tayyorlanmoqda...</Text>
-      </View>
-    );
-  }
-
-  // URI hozir aniq mavjud — shu sababli VideoPlayer ni alohida child komponentda,
-  // hech qachon null bilan yaratmaslikka harakat qilamiz.
-  return (
-    <IntroVideoPlayer
-      uri={videoUri}
-      canSkip={canSkip === 'true'}
-      onFinish={handleFinish}
-    />
-  );
-}
-
-function IntroVideoPlayer({
-  uri,
-  canSkip,
-  onFinish,
-}: {
-  uri: string;
-  canSkip: boolean;
-  onFinish: () => void;
-}) {
   const [errored, setErrored] = useState(false);
 
-  const player = useVideoPlayer(uri, (p) => {
+  // Offline rejim — `require(...)` orqali bundle qilingan asset ID.
+  const videoSource = getAssetModule('videos', VIDEO_FILE) ?? null;
+
+  const player = useVideoPlayer(videoSource, (p) => {
     p.loop = false;
     p.muted = false;
     try {
@@ -78,8 +23,13 @@ function IntroVideoPlayer({
     }
   });
 
+  const handleFinish = () => {
+    if (nextRoute) router.replace(nextRoute as any);
+    else router.back();
+  };
+
   useEffect(() => {
-    const endSub = player.addListener('playToEnd', () => onFinish());
+    const endSub = player.addListener('playToEnd', handleFinish);
     const statusSub = player.addListener(
       'statusChange',
       ({ status, error }: { status: VideoPlayerStatus; error?: unknown }) => {
@@ -91,13 +41,14 @@ function IntroVideoPlayer({
       endSub.remove();
       statusSub.remove();
     };
-  }, [player, onFinish]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player]);
 
-  if (errored) {
+  if (errored || videoSource == null) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.loadingText}>Video yuklanmadi</Text>
-        <TouchableOpacity style={styles.skipButton} onPress={onFinish}>
+        <Text style={styles.loadingText}>Video topilmadi</Text>
+        <TouchableOpacity style={styles.skipButton} onPress={handleFinish}>
           <Text style={styles.skipText}>Davom etish ▶</Text>
         </TouchableOpacity>
       </View>
@@ -115,12 +66,12 @@ function IntroVideoPlayer({
         nativeControls={false}
       />
 
-      {canSkip && (
+      {canSkip === 'true' && (
         <TouchableOpacity
           style={styles.skipButton}
           onPress={() => {
             try { player.pause(); } catch {}
-            onFinish();
+            handleFinish();
           }}
         >
           <Text style={styles.skipText}>O&apos;tkazib yuborish ⏭</Text>
