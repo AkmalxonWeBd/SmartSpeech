@@ -710,7 +710,10 @@ export default function DashboardScreen() {
     if (targetX == null) return;
     didAutoScrollRef.current = true;
 
-    const centered = Math.max(0, targetX - (SCREEN_W - CAR_WIDTH) / 2);
+    // trainRow sits inside a ScrollView whose contentContainerStyle has
+    // paddingLeft: 40, so onLayout x is relative to the row, not the
+    // scroll content. Add that padding back before centering.
+    const centered = Math.max(0, targetX + 40 - (SCREEN_W - CAR_WIDTH) / 2);
     setTimeout(() => {
       scrollRef.current?.scrollTo({ x: centered, y: 0, animated: true });
     }, 650);

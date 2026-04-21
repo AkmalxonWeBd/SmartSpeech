@@ -458,16 +458,7 @@ export default function LessonScreen() {
   const handleVictory = async () => {
     setIsVictory(true);
     playSound('victory'); // Assumes victory sound exists
-    
-    // Animate victory text
-    itemScale.setValue(0);
-    Animated.spring(itemScale, {
-      toValue: 1,
-      friction: 4,
-      tension: 10,
-      useNativeDriver: true
-    }).start();
-    
+
     // Update progress in API / LocalStorage
     try {
       const userStr = await AsyncStorage.getItem('user_data');
