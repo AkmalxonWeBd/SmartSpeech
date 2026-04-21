@@ -10,6 +10,9 @@ const SOUND_FILES: Record<string, string> = {
   magic: 'magic.mp3',
   train: 'train.mp3',
   success: 'success.mp3',
+  // Reuse existing assets for semantic aliases the UI calls with.
+  error: 'pop.mp3',
+  victory: 'magic.mp3',
 };
 
 export async function preloadSounds() {

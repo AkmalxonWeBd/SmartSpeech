@@ -164,30 +164,76 @@ export default function WordLessonScreen() {
   };
 
   // === SPEAK ===
+  const lastInterimRef = useRef<string>('');
+
+  // Pick the alternative that best matches `expected`.
+  const pickBestMatch = (candidates: string[], expected: string): string => {
+    if (candidates.length === 0) return '';
+    const ne = normalize(expected);
+    let best = candidates[0];
+    let bestScore = -1;
+    for (const c of candidates) {
+      const nc = normalize(c);
+      const score = nc.includes(ne) || ne.includes(nc) ? 1 : similarity(c, expected);
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    return best;
+  };
+
   useSpeechRecognitionEvent('result', (ev) => {
-    const t = ev.results[0]?.transcript ?? '';
+    const allTranscripts = ev.results
+      .map((r) => r?.transcript ?? '')
+      .filter((t) => t.length > 0);
+    const t = allTranscripts[0] ?? '';
     setRecognizedText(t);
+    if (t) lastInterimRef.current = t;
     if (ev.isFinal && !isCheckingRef.current) {
       isCheckingRef.current = true; setIsChecking(true); setIsRecording(false);
       Animated.spring(micScale, {toValue:1, useNativeDriver:true}).start();
       const p = phaseRef.current;
       if (p === 'speak') {
         const w = wordsRef.current[idxRef.current];
-        if (w) checkSpeak(t, w.en);
+        if (w) {
+          const chosen = pickBestMatch(allTranscripts, w.en);
+          checkSpeak(chosen || t, w.en);
+        }
       } else if (p === 'recall') {
         const w = recallQueueRef.current[idxRef.current];
         // Strip "english" filler word — user says "english sea" but means "sea"
-        const cleaned = t.replace(/\benglish\b/gi, '').replace(/\s+/g, ' ').trim();
-        if (w) checkRecall(cleaned || t, w.en);
+        const stripFiller = (s: string) => s.replace(/\benglish\b/gi, '').replace(/\s+/g, ' ').trim();
+        if (w) {
+          const cleanedAlts = allTranscripts.map(stripFiller).filter(Boolean);
+          const chosen = pickBestMatch(cleanedAlts, w.en);
+          checkRecall(chosen || stripFiller(t) || t, w.en);
+        }
       }
     }
   });
-  useSpeechRecognitionEvent('error', () => { setIsRecording(false); setIsChecking(false); isCheckingRef.current=false; Animated.spring(micScale,{toValue:1,useNativeDriver:true}).start(); });
+  useSpeechRecognitionEvent('error', (ev) => {
+    console.warn('[word-lesson] speech error:', ev.error, ev.message);
+    const interim = lastInterimRef.current;
+    const p = phaseRef.current;
+    if (
+      !isCheckingRef.current &&
+      interim &&
+      (ev.error === 'no-speech' || ev.error === 'speech-timeout')
+    ) {
+      if (p === 'speak') {
+        const w = wordsRef.current[idxRef.current];
+        if (w) { isCheckingRef.current = true; setIsChecking(true); checkSpeak(interim, w.en); }
+      } else if (p === 'recall') {
+        const w = recallQueueRef.current[idxRef.current];
+        if (w) { isCheckingRef.current = true; setIsChecking(true); checkRecall(interim, w.en); }
+      }
+    }
+    setIsRecording(false); Animated.spring(micScale,{toValue:1,useNativeDriver:true}).start();
+  });
   useSpeechRecognitionEvent('end', () => { setIsRecording(false); Animated.spring(micScale,{toValue:1,useNativeDriver:true}).start(); });
 
   const startRec = (contextWord: string) => {
     if (isCheckingRef.current) return;
     setIsRecording(true); setRecognizedText(''); setIsChecking(false); isCheckingRef.current=false;
+    lastInterimRef.current = '';
     playSound('click');
     Animated.spring(micScale, {toValue:1.4, useNativeDriver:true}).start();
     // Provide ALL lesson words as context to bias the engine
@@ -195,9 +241,17 @@ export default function WordLessonScreen() {
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
       interimResults: true,
-      continuous: true, // Don't stop early on short words
+      continuous: false,
       maxAlternatives: 5,
       contextualStrings: [contextWord, ...allContext],
+      // Critical for short-word recognition on Android
+      // (see https://issuetracker.google.com/issues/280288200#comment28)
+      androidIntentOptions: {
+        EXTRA_LANGUAGE_MODEL: 'web_search',
+        EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2500,
+        EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 2500,
+      },
+      iosTaskHint: 'confirmation',
     });
   };
   const stopRec = () => { try{ExpoSpeechRecognitionModule.stop();}catch(_){} };
