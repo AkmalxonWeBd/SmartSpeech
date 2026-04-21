@@ -327,7 +327,7 @@ export default function ExamScreen() {
     }
 
     setTimeout(() => {
-      router.replace('/');
+      router.replace('/dashboard');
     }, 8000);
   };
 

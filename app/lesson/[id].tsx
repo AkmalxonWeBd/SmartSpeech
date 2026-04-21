@@ -463,7 +463,7 @@ export default function LessonScreen() {
     // Go back to dashboard after animation
     setTimeout(() => {
       // Pass a parameter to trigger the dashboard unlock animation
-      router.replace({ pathname: '/', params: { unlockedLesson: lessonId + 1 } });
+      router.replace({ pathname: '/dashboard', params: { unlockedLesson: lessonId + 1 } });
     }, 4000);
   };
 
