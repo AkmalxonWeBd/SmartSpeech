@@ -142,6 +142,7 @@ export default function ExamScreen() {
 
   const currentIndexRef = useRef(0);
   const isCheckingRef = useRef(false);
+  const itemsRef = useRef<Item[]>([]);
 
   const itemScale = useRef(new Animated.Value(0)).current;
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
@@ -171,12 +172,16 @@ export default function ExamScreen() {
       const pool = buildWordPool(examLevel === 'a2' ? 'a2' : 'a1');
       next = pool.map((w) => ({ kind: 'word', word: w }));
     }
+    itemsRef.current = next;
     setItems(next);
     setCurrentIndex(0);
     currentIndexRef.current = 0;
     animateItemIn();
   }, [mode, examLevel]);
 
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
@@ -234,13 +239,17 @@ export default function ExamScreen() {
     if (cleaned) lastInterimRef.current = cleaned;
 
     if (event.isFinal && !isCheckingRef.current) {
+      const item = itemsRef.current[currentIndexRef.current];
+      if (!item) {
+        setIsRecording(false);
+        Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
+        return;
+      }
       isCheckingRef.current = true;
       setIsChecking(true);
       setIsRecording(false);
       Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
 
-      const item = items[currentIndexRef.current];
-      if (!item) return;
       if (item.kind === 'letter') {
         const candidates = all.map(cleanTranscript);
         const chosen = pickBest(candidates, item.letter, true);
@@ -256,8 +265,10 @@ export default function ExamScreen() {
   useSpeechRecognitionEvent('error', (event) => {
     console.warn('[exam] speech error:', event.error, event.message);
     const interim = lastInterimRef.current;
+    const item = itemsRef.current[currentIndexRef.current];
     if (
       !isCheckingRef.current &&
+      item &&
       interim &&
       (event.error === 'no-speech' || event.error === 'speech-timeout')
     ) {
@@ -329,8 +340,12 @@ export default function ExamScreen() {
   };
 
   const checkResult = (recognized: string) => {
-    const item = items[currentIndexRef.current];
-    if (!item) return;
+    const item = itemsRef.current[currentIndexRef.current];
+    if (!item) {
+      setIsChecking(false);
+      isCheckingRef.current = false;
+      return;
+    }
     const ok =
       item.kind === 'letter'
         ? matchesLetter(recognized, item.letter)
@@ -363,7 +378,7 @@ export default function ExamScreen() {
   };
 
   const speakCurrent = () => {
-    const item = items[currentIndexRef.current];
+    const item = itemsRef.current[currentIndexRef.current];
     if (!item) return;
     const text = item.kind === 'letter' ? item.letter : item.word.en;
     Speech.speak(text, { language: 'en-US', rate: 0.75, pitch: 1.0 });
@@ -371,7 +386,7 @@ export default function ExamScreen() {
 
   const advance = () => {
     const next = currentIndexRef.current + 1;
-    if (next < items.length) {
+    if (next < itemsRef.current.length) {
       currentIndexRef.current = next;
       setCurrentIndex(next);
       animateItemIn();
