@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   Easing,
   TouchableOpacity,
   ScrollView,
-  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,13 +15,13 @@ import { playSound } from '../utils/soundProvider';
 import { router, useLocalSearchParams } from 'expo-router';
 import { t } from '../utils/translations';
 import { API } from '../utils/api';
-import LottieView from 'lottie-react-native';
+import Backdrop, { BackdropVariant } from '../components/dashboard/Backdrop';
+import Mascot, { LESSON_MASCOTS, BOSS_MASCOT } from '../components/dashboard/Mascot';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CAR_WIDTH = SCREEN_W / 2.5;
 const CAR_HEIGHT = SCREEN_H * 0.32;
 const TOTAL_LESSONS = 12;
-const TRACK_Y = SCREEN_H * 0.72;
 
 type UserData = { age: number; name: string; level: string; progress: number };
 
@@ -226,8 +225,8 @@ const locoStyles = StyleSheet.create({
 // ═══════════════════════════════════════════════
 // LESSON CAR COMPONENT (3D REALISTIC)
 // ═══════════════════════════════════════════════
-function LessonCar({ index, isUnlocked, isNewlyUnlocked, wheelSpin, levelColors, level }: {
-  index: number; isUnlocked: boolean; isNewlyUnlocked?: boolean; wheelSpin: Animated.AnimatedInterpolation<string>; levelColors: string[]; level: string;
+function LessonCar({ index, isUnlocked, isNewlyUnlocked, wheelSpin, levelColors, level, mascot }: {
+  index: number; isUnlocked: boolean; isNewlyUnlocked?: boolean; wheelSpin: Animated.AnimatedInterpolation<string>; levelColors: string[]; level: string; mascot: string;
 }) {
   const pressScale = useRef(new Animated.Value(1)).current;
   const unlockScale = useRef(new Animated.Value(isNewlyUnlocked ? 0 : 1)).current;
@@ -293,6 +292,11 @@ function LessonCar({ index, isUnlocked, isNewlyUnlocked, wheelSpin, levelColors,
       onPress={handlePress}
     >
       <Animated.View style={[carStyles.wrapper, { transform: [{ scale: pressScale }, { scale: unlockScale }] }]}>
+        {/* Mascot sitting on top of the wagon */}
+        <View style={carStyles.mascotSlot}>
+          <Mascot emoji={mascot} size={56} delay={index * 120} locked={!isUnlocked} />
+        </View>
+
         {/* Coupler */}
         <View style={carStyles.coupler}>
           <View style={carStyles.couplerBolt} />
@@ -351,7 +355,8 @@ function LessonCar({ index, isUnlocked, isNewlyUnlocked, wheelSpin, levelColors,
 }
 
 const carStyles = StyleSheet.create({
-  wrapper: { width: CAR_WIDTH, alignItems: 'center', justifyContent: 'flex-end', height: CAR_HEIGHT + 30, marginBottom: WHEEL_PROTRUDE },
+  wrapper: { width: CAR_WIDTH, alignItems: 'center', justifyContent: 'flex-end', height: CAR_HEIGHT + 90, marginBottom: WHEEL_PROTRUDE },
+  mascotSlot: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', zIndex: 5 },
   coupler: { position: 'absolute', left: -12, bottom: WHEEL_PROTRUDE + 30, width: 15, height: 10, backgroundColor: '#444', borderRadius: 3, justifyContent: 'center', alignItems: 'center' },
   couplerBolt: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#888' },
   body: {
@@ -402,6 +407,11 @@ function BossCar({ wheelSpin, isUnlocked }: { wheelSpin: Animated.AnimatedInterp
       onPress={handlePress}
     >
       <Animated.View style={[bossStyles.wrapper, { transform: [{ scale: pressScale }] }]}>
+        {/* Mascot sitting on top (boss mascot) */}
+        <View style={bossStyles.mascotSlot}>
+          <Mascot emoji={BOSS_MASCOT} size={64} delay={0} locked={!isUnlocked} />
+        </View>
+
         {/* Coupler */}
         <View style={bossStyles.coupler}><View style={bossStyles.couplerBolt} /></View>
 
@@ -449,7 +459,8 @@ function BossCar({ wheelSpin, isUnlocked }: { wheelSpin: Animated.AnimatedInterp
 }
 
 const bossStyles = StyleSheet.create({
-  wrapper: { width: CAR_WIDTH * 1.3, alignItems: 'center', justifyContent: 'flex-end', height: CAR_HEIGHT + 50, marginBottom: WHEEL_PROTRUDE },
+  wrapper: { width: CAR_WIDTH * 1.3, alignItems: 'center', justifyContent: 'flex-end', height: CAR_HEIGHT + 110, marginBottom: WHEEL_PROTRUDE },
+  mascotSlot: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', zIndex: 5 },
   coupler: { position: 'absolute', left: -12, bottom: WHEEL_PROTRUDE + 40, width: 15, height: 10, backgroundColor: '#444', borderRadius: 3, justifyContent: 'center', alignItems: 'center' },
   couplerBolt: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#888' },
   body: {
@@ -515,38 +526,6 @@ const trackStyles = StyleSheet.create({
 });
 
 // ═══════════════════════════════════════════════
-// DYNAMIC PARTICLES (STARS/NATURE)
-// ═══════════════════════════════════════════════
-function FloatingParticle({ emoji, x, y, delay, speed }: { emoji: string; x: number; y: number; delay: number; speed: number }) {
-  const float = useRef(new Animated.Value(0)).current;
-  const fade = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      Animated.loop(Animated.parallel([
-        Animated.sequence([
-          Animated.timing(float, { toValue: -20, duration: speed, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(float, { toValue: 0, duration: speed, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        ]),
-        Animated.sequence([
-          Animated.timing(fade, { toValue: 1, duration: 800, useNativeDriver: true }),
-          Animated.delay(speed * 2 - 1600),
-          Animated.timing(fade, { toValue: 0.4, duration: 800, useNativeDriver: true }),
-        ]),
-      ])).start();
-    }, delay);
-    return () => clearTimeout(t);
-  }, []);
-
-  return (
-    <Animated.Text style={{
-      position: 'absolute', left: x, top: y, fontSize: 26,
-      opacity: fade, transform: [{ translateY: float }],
-    }}>{emoji}</Animated.Text>
-  );
-}
-
-// ═══════════════════════════════════════════════
 // MAIN DASHBOARD SCREEN
 // ═══════════════════════════════════════════════
 export default function DashboardScreen() {
@@ -562,24 +541,21 @@ export default function DashboardScreen() {
   const headerFade = useRef(new Animated.Value(0)).current;
   const settingsRotate = useRef(new Animated.Value(0)).current;
 
-  const vibes: Record<string, { bg: string[]; carColors: string[]; text: string; particles: string[] }> = {
+  const vibes: Record<string, { backdrop: BackdropVariant; carColors: string[]; text: string }> = {
     beginner: {
-      bg: ['#0B5345', '#1ABC9C', '#48C9B0', '#76D7C4'],
-      carColors: ['#1E8449', '#27AE60', '#2ECC71'],
+      backdrop: 'forest',
+      carColors: ['#117A65', '#1ABC9C', '#48C9B0'],
       text: t('vibeTextBeginner'),
-      particles: ['🌲', '🌿', '🍀', '🌱', '🦋', '🐛'],
     },
     a1: {
-      bg: ['#1B2631', '#2E4053', '#2471A3', '#5DADE2'],
-      carColors: ['#1B4F72', '#2196F3', '#5DADE2'],
+      backdrop: 'sky',
+      carColors: ['#1B4F72', '#2874A6', '#3498DB'],
       text: t('vibeTextA1'),
-      particles: ['☁️', '🌤️', '⭐', '🌈', '🎈', '🪁'],
     },
     a2: {
-      bg: ['#1A0A2E', '#4A235A', '#7D3C98', '#A569BD'],
-      carColors: ['#6C3483', '#8E44AD', '#AF7AC5'],
+      backdrop: 'space',
+      carColors: ['#6C3483', '#8E44AD', '#A569BD'],
       text: t('vibeTextA2'),
-      particles: ['🌟', '🪐', '🚀', '✨', '🌙', '⭐'],
     },
   };
 
@@ -649,25 +625,10 @@ export default function DashboardScreen() {
     }, 250);
   };
 
-  const particles = vibe.particles.flatMap((emoji, ei) =>
-    [0, 1].map((j) => ({
-      emoji,
-      x: (ei * 140 + j * 70 + 40) % (SCREEN_W - 40),
-      y: 30 + ((ei * 50 + j * 80) % (SCREEN_H * 0.45)),
-      delay: ei * 300 + j * 600,
-      speed: 1500 + ei * 200,
-    }))
-  );
-
   return (
     <View style={styles.container}>
-      {/* Dynamic gradient background */}
-      <LinearGradient colors={vibe.bg as any} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 0.3, y: 1 }} />
-
-      {/* Floating particles */}
-      {particles.map((p, i) => (
-        <FloatingParticle key={i} {...p} />
-      ))}
+      {/* Parallax backdrop: sky + sun + clouds + mountains + ground */}
+      <Backdrop variant={vibe.backdrop} />
 
       {/* ═══ HEADER ═══ */}
       <Animated.View style={[styles.header, { transform: [{ translateY: headerSlide }], opacity: headerFade }]}>
@@ -708,7 +669,8 @@ export default function DashboardScreen() {
               const progress = userData?.progress || 1;
               const isUnlocked = lessonNum <= progress;
               const isNewlyUnlocked = lessonNum === newlyUnlockedLesson;
-              
+              const mascot = LESSON_MASCOTS[i % LESSON_MASCOTS.length];
+
               return (
                 <LessonCar
                   key={i}
@@ -718,6 +680,7 @@ export default function DashboardScreen() {
                   wheelSpin={wheelSpin}
                   levelColors={vibe.carColors}
                   level={level}
+                  mascot={mascot}
                 />
               );
             })}
