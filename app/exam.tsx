@@ -175,11 +175,18 @@ export default function ExamScreen() {
     return false;
   };
 
+  // Track best interim so we can fall back if final never arrives.
+  const lastInterimRef = useRef<string>('');
+
   // Speech events
   useSpeechRecognitionEvent('result', (event) => {
-    const raw = event.results[0]?.transcript ?? '';
+    const allTranscripts = event.results
+      .map((r) => r?.transcript ?? '')
+      .filter((t) => t.length > 0);
+    const raw = allTranscripts[0] ?? '';
     const cleaned = cleanTranscript(raw);
     setRecognizedText(cleaned || raw);
+    if (cleaned) lastInterimRef.current = cleaned;
 
     if (event.isFinal && !isCheckingRef.current) {
       isCheckingRef.current = true;
@@ -188,14 +195,30 @@ export default function ExamScreen() {
       Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
 
       const letter = ALL_LETTERS[currentIndexRef.current];
-      if (letter) checkPronunciation(cleaned, letter);
+      if (letter) {
+        // Try every alternative against the expected letter
+        const candidates = allTranscripts.map(cleanTranscript);
+        const chosen = candidates.find((c) => matchesLetter(c, letter)) ?? candidates[0] ?? cleaned;
+        checkPronunciation(chosen, letter);
+      }
     }
   });
 
-  useSpeechRecognitionEvent('error', () => {
+  useSpeechRecognitionEvent('error', (event) => {
+    console.warn('[exam] speech error:', event.error, event.message);
+    const letter = ALL_LETTERS[currentIndexRef.current];
+    const interim = lastInterimRef.current;
+    if (
+      !isCheckingRef.current &&
+      letter &&
+      interim &&
+      (event.error === 'no-speech' || event.error === 'speech-timeout')
+    ) {
+      isCheckingRef.current = true;
+      setIsChecking(true);
+      checkPronunciation(interim, letter);
+    }
     setIsRecording(false);
-    setIsChecking(false);
-    isCheckingRef.current = false;
     Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
   });
 
@@ -223,12 +246,20 @@ export default function ExamScreen() {
       const letter = ALL_LETTERS[currentIndex];
       const phonetics = LETTER_PHONETICS[letter.toLowerCase()] || [];
 
+      lastInterimRef.current = '';
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
         continuous: false,
         maxAlternatives: 5,
         contextualStrings: [letter, ...phonetics],
+        // Critical for recognising single letters on Android.
+        androidIntentOptions: {
+          EXTRA_LANGUAGE_MODEL: 'web_search',
+          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+          EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+        },
+        iosTaskHint: 'confirmation',
       });
     } catch (err) {
       console.error('Exam speech error', err);

@@ -112,25 +112,40 @@ export default function LessonScreen() {
       .trim();
   };
 
+  // Track the best interim transcript so we can fall back to it if the
+  // engine never fires an `isFinal` result (common on Android for very
+  // short utterances like a single letter).
+  const lastInterimRef = useRef<string>('');
+
   // --- Speech Recognition Event Handlers ---
   useSpeechRecognitionEvent('result', (event) => {
-    const rawTranscript = event.results[0]?.transcript ?? '';
     const currentItem = queueRef.current[currentIndexRef.current];
-
-    // Only strip "english" during the letter phase
     const isLetterItem = currentItem?.type === 'letter';
+
+    // event.results contains up to `maxAlternatives` transcripts for the
+    // same utterance. Check all of them — on Android, results[0] is often
+    // empty for short prompts while results[1..] contains the actual match.
+    const allTranscripts = event.results
+      .map((r) => r?.transcript ?? '')
+      .filter((t) => t.length > 0);
+    const rawTranscript = allTranscripts[0] ?? '';
     const transcript = isLetterItem ? cleanTranscript(rawTranscript) : rawTranscript;
     setRecognizedText(transcript || rawTranscript);
+    if (transcript) lastInterimRef.current = transcript;
 
     if (event.isFinal && !isCheckingRef.current) {
-      // Final result received — check pronunciation
+      // Final result received — check pronunciation against EVERY alternative
       isCheckingRef.current = true;
       setIsChecking(true);
       setIsRecording(false);
       Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
 
       if (currentItem) {
-        checkPronunciation(transcript, currentItem.text);
+        const candidates = allTranscripts.map((t) =>
+          isLetterItem ? cleanTranscript(t) : t,
+        );
+        const chosen = candidates.length ? pickBestMatch(candidates, currentItem.text) : transcript;
+        checkPronunciation(chosen, currentItem.text);
       } else {
         isCheckingRef.current = false;
         setIsChecking(false);
@@ -140,9 +155,24 @@ export default function LessonScreen() {
 
   useSpeechRecognitionEvent('error', (event) => {
     console.warn('Speech recognition error:', event.error, event.message);
+    // On Android, short utterances often surface as `no-speech` /
+    // `speech-timeout` even when the user did say something. (The native
+    // ERROR_NO_MATCH code is mapped to 'no-speech' by expo-speech-recognition
+    // — see ExpoSpeechService.kt.) If we captured a useful interim, check
+    // it instead of silently discarding the attempt.
+    const currentItem = queueRef.current[currentIndexRef.current];
+    const interim = lastInterimRef.current;
+    if (
+      !isCheckingRef.current &&
+      currentItem &&
+      interim &&
+      (event.error === 'no-speech' || event.error === 'speech-timeout')
+    ) {
+      isCheckingRef.current = true;
+      setIsChecking(true);
+      checkPronunciation(interim, currentItem.text);
+    }
     setIsRecording(false);
-    setIsChecking(false);
-    isCheckingRef.current = false;
     Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
   });
 
@@ -295,6 +325,30 @@ export default function LessonScreen() {
     return (2 * matches) / (na.length - 1 + nb.length - 1);
   };
 
+  // Pick the transcript alternative most likely to be a match for the
+  // expected text. Falls back to the first one.
+  const pickBestMatch = (candidates: string[], expected: string): string => {
+    if (candidates.length === 0) return '';
+    const isLetter = expected.length <= 2;
+    if (isLetter) {
+      const hit = candidates.find((c) => matchesLetterPhonetically(c, expected));
+      if (hit) return hit;
+      return candidates[0];
+    }
+    const ne = normalize(expected);
+    let best = candidates[0];
+    let bestScore = -1;
+    for (const c of candidates) {
+      const nc = normalize(c);
+      const score = nc.includes(ne) || ne.includes(nc) ? 1 : similarity(c, expected);
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    return best;
+  };
+
   // Check if recognized text matches a single letter via phonetics
   const matchesLetterPhonetically = (recognized: string, letter: string): boolean => {
     const normalizedRec = normalize(recognized);
@@ -338,6 +392,7 @@ export default function LessonScreen() {
         }
       }
 
+      lastInterimRef.current = '';
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
@@ -345,6 +400,16 @@ export default function LessonScreen() {
         maxAlternatives: 5,
         // Bias the recognizer towards the expected text and its phonetics
         contextualStrings: contextStrings,
+        // Huge reliability boost for single letters / short words on Android.
+        // Google's own guidance: https://issuetracker.google.com/issues/280288200#comment28
+        androidIntentOptions: {
+          EXTRA_LANGUAGE_MODEL: 'web_search',
+          // Give the user a bit more time to speak before cutting off
+          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+          EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+        },
+        // iOS: `confirmation` is tuned for short Yes/No/letter utterances.
+        iosTaskHint: 'confirmation',
       });
     } catch (err) {
       console.error('Failed to start speech recognition', err);
