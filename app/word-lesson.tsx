@@ -282,7 +282,7 @@ export default function WordLessonScreen() {
         await API.updateProgress(np);
       }
     } catch(_){}
-    setTimeout(() => router.replace('/'), 4000);
+    setTimeout(() => router.replace('/dashboard'), 4000);
   };
 
   // === RENDER ===

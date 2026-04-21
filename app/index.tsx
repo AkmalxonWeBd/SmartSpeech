@@ -168,22 +168,26 @@ export default function SplashScreen() {
   // Percent text glow
   const percentGlow = useRef(new Animated.Value(0)).current;
 
+  // Tracks whether `initialize()` (settings, asset download, sound preload) finished
+  const initDoneRef = useRef(false);
+  const splashElapsedRef = useRef(false);
+
   useEffect(() => {
     // Load settings, download assets, then preload sounds
     const initialize = async () => {
       try {
         await loadSettings();
-        
-        // Asset Download Phase
-        await downloadCoreAssets((progress) => {
-          // You could optionally sync this with the main loadingProgress 
-          // but here we just ensure they are done before preloading sounds
-        });
+
+        // Asset Download Phase — assetlar tushirilmaguncha videoga o'tish ekranni qoraytiradi
+        await downloadCoreAssets(() => {});
 
         await preloadSounds();
         playSound('magic');
       } catch (e) {
         console.warn('Initialization failed', e);
+      } finally {
+        initDoneRef.current = true;
+        maybeNavigate();
       }
     };
     initialize();
@@ -280,18 +284,10 @@ export default function SplashScreen() {
       })
     ).start();
 
-    // Navigate after splash duration
-    const timer = setTimeout(async () => {
-      try {
-        const userData = await AsyncStorage.getItem('user_data');
-        if (userData) {
-          router.replace('/dashboard');
-        } else {
-          router.replace('/onboarding');
-        }
-      } catch {
-        router.replace('/onboarding');
-      }
+    // Minimal splash duration has passed — now waiting (or ready) for initialize()
+    const timer = setTimeout(() => {
+      splashElapsedRef.current = true;
+      maybeNavigate();
     }, SPLASH_DURATION);
 
     return () => {
@@ -299,6 +295,20 @@ export default function SplashScreen() {
       loadingProgress.removeListener(listenerId);
     };
   }, []);
+
+  // Splash ham tugagan va initialize() ham bitgan bo'lsa — navigatsiya
+  const navigatedRef = useRef(false);
+  async function maybeNavigate() {
+    if (navigatedRef.current) return;
+    if (!initDoneRef.current || !splashElapsedRef.current) return;
+    navigatedRef.current = true;
+    try {
+      const userData = await AsyncStorage.getItem('user_data');
+      router.replace(userData ? '/dashboard' : '/onboarding');
+    } catch {
+      router.replace('/onboarding');
+    }
+  }
 
   const loadingWidth = loadingProgress.interpolate({
     inputRange: [0, 1],

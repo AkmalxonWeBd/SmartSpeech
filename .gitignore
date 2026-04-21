@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Server runtime data (foydalanuvchi PII — repoga commit qilinmasin)
+server/db.json
+
 # typescript
 *.tsbuildinfo
 
