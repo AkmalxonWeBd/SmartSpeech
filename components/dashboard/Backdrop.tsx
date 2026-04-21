@@ -59,17 +59,26 @@ function Cloud({
   const x = useRef(new Animated.Value(-size * 2)).current;
 
   useEffect(() => {
-    const loop = () => {
+    let cancelled = false;
+    const animate = () => {
+      if (cancelled) return;
       x.setValue(-size * 2);
       Animated.timing(x, {
         toValue: SCREEN_W + size,
         duration,
-        delay,
         easing: Easing.linear,
         useNativeDriver: true,
-      }).start(() => loop());
+      }).start(({ finished }) => {
+        if (finished && !cancelled) animate();
+      });
     };
-    loop();
+    // `delay` only staggers the initial traversal; subsequent cycles restart immediately.
+    const timer = setTimeout(animate, delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      x.stopAnimation();
+    };
   }, [duration, delay, size, x]);
 
   return (

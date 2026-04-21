@@ -46,7 +46,6 @@ export default function Mascot({
           duration: 900,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
-          delay,
         }),
         Animated.timing(bounce, {
           toValue: 0,
@@ -56,8 +55,12 @@ export default function Mascot({
         }),
       ]),
     );
-    loop.start();
-    return () => loop.stop();
+    // `delay` staggers only the initial start; bounce cadence stays uniform.
+    const timer = setTimeout(() => loop.start(), delay);
+    return () => {
+      clearTimeout(timer);
+      loop.stop();
+    };
   }, [amplitude, bounce, delay, locked]);
 
   const platformWidth = size * 1.25;
