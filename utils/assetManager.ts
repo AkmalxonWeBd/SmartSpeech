@@ -31,7 +31,7 @@ type AssetType = keyof typeof ASSETS;
 
 /**
  * Bundle qilingan asset'ning Metro modul ID'sini qaytaradi (`require(...)`
- * natijasi). `Image`, `expo-video` va `expo-av` shu raqamli ID'ni bevosita
+ * natijasi). `Image`, `expo-video` va `expo-audio` shu raqamli ID'ni bevosita
  * qabul qiladi.
  */
 export function getAssetModule(type: AssetType, fileName: string): number | undefined {

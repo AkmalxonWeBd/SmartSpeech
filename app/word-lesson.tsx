@@ -229,7 +229,21 @@ export default function WordLessonScreen() {
     }
     setIsRecording(false); Animated.spring(micScale,{toValue:1,useNativeDriver:true}).start();
   });
-  useSpeechRecognitionEvent('end', () => { setIsRecording(false); Animated.spring(micScale,{toValue:1,useNativeDriver:true}).start(); });
+  useSpeechRecognitionEvent('end', () => {
+    const interim = lastInterimRef.current;
+    const p = phaseRef.current;
+    if (!isCheckingRef.current && interim) {
+      if (p === 'speak') {
+        const w = wordsRef.current[idxRef.current];
+        if (w) { isCheckingRef.current = true; setIsChecking(true); checkSpeak(interim, w.en); }
+      } else if (p === 'recall') {
+        const w = recallQueueRef.current[idxRef.current];
+        if (w) { isCheckingRef.current = true; setIsChecking(true); checkRecall(interim, w.en); }
+      }
+    }
+    setIsRecording(false);
+    Animated.spring(micScale, {toValue:1, useNativeDriver:true}).start();
+  });
 
   const startRec = (contextWord: string) => {
     if (isCheckingRef.current) return;

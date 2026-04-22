@@ -18,7 +18,6 @@ export default function RootLayout() {
     // Hide Android Navigation Bar (Bottom buttons)
     if (Platform.OS === 'android') {
       NavigationBar.setVisibilityAsync('hidden');
-      NavigationBar.setBehaviorAsync('overlay-swipe');
     }
   }, []);
 

@@ -1,8 +1,8 @@
-import { Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 import { getSettings } from './settingsManager';
 import { getAssetModule } from './assetManager';
 
-let sounds: { [key: string]: Audio.Sound } = {};
+let players: { [key: string]: any } = {};
 
 const SOUND_FILES: Record<string, string> = {
   pop: 'pop.mp3',
@@ -10,7 +10,6 @@ const SOUND_FILES: Record<string, string> = {
   magic: 'magic.mp3',
   train: 'train.mp3',
   success: 'success.mp3',
-  // Reuse existing assets for semantic aliases the UI calls with.
   error: 'pop.mp3',
   victory: 'magic.mp3',
 };
@@ -20,12 +19,16 @@ export async function preloadSounds() {
     for (const [key, fileName] of Object.entries(SOUND_FILES)) {
       const mod = getAssetModule('sounds', fileName);
       if (mod == null) continue;
-      const sound = new Audio.Sound();
-      await sound.loadAsync(mod);
-      sounds[key] = sound;
+      
+      // Release existing player if any
+      if (players[key]) {
+        players[key].release();
+      }
+      
+      players[key] = createAudioPlayer(mod);
     }
   } catch (error) {
-    console.warn('Could not load bundled sounds', error);
+    console.warn('Could not preload sounds', error);
   }
 }
 
@@ -34,9 +37,13 @@ export async function playSound(name: string) {
     const settings = getSettings();
     if (!settings.soundEnabled) return;
 
-    const sound = sounds[name];
-    if (sound) {
-      await sound.replayAsync();
+    const player = players[name];
+    if (player) {
+      // If already playing, seek to start (like replayAsync)
+      if (player.status === 'playing') {
+        player.seekTo(0);
+      }
+      player.play();
     }
   } catch (error) {
     console.warn(`Could not play sound: ${name}`, error);
@@ -44,10 +51,12 @@ export async function playSound(name: string) {
 }
 
 export async function unloadSounds() {
-  for (const key in sounds) {
+  for (const key in players) {
     try {
-      await sounds[key].unloadAsync();
+      players[key].release();
     } catch {}
   }
-  sounds = {};
+  players = {};
 }
+
+

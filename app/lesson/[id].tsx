@@ -135,6 +135,13 @@ export default function LessonScreen() {
   });
 
   useSpeechRecognitionEvent('end', () => {
+    const interim = lastInterimRef.current;
+    const currentItem = queueRef.current[currentIndexRef.current];
+    if (!isCheckingRef.current && currentItem && interim) {
+      isCheckingRef.current = true;
+      setIsChecking(true);
+      checkPronunciation(interim, currentItem.text);
+    }
     setIsRecording(false);
     Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
   });

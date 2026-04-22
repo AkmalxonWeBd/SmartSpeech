@@ -281,6 +281,13 @@ export default function ExamScreen() {
   });
 
   useSpeechRecognitionEvent('end', () => {
+    const interim = lastInterimRef.current;
+    const item = itemsRef.current[currentIndexRef.current];
+    if (!isCheckingRef.current && item && interim) {
+      isCheckingRef.current = true;
+      setIsChecking(true);
+      checkResult(interim);
+    }
     setIsRecording(false);
     Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
   });
