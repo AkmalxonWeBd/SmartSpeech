@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const wordsDB: WordsEntry[] = require('../assets/data/words.json');
 import VictoryOverlay from '../components/VictoryOverlay';
+import { palette, radius, shadowFx, spacing } from '../utils/theme';
 
 type Word = { en: string; uz: string };
 type WordsEntry = { level: string; lesson: number; words: Word[] };
@@ -477,25 +478,46 @@ export default function ExamScreen() {
     };
   })();
 
+  const examBg: [string, string, string] = examLevel === 'beginner'
+    ? ['#1B3A7A', '#2E67B8', '#5DADE2']
+    : examLevel === 'a1'
+      ? ['#0E2B5F', '#2F80ED', '#6CB8FF']
+      : ['#1A0842', '#4B1082', '#A55BD1'];
+
   return (
-    <LinearGradient colors={['#1A0A2E', '#2D1B69', '#4A235A']} style={s.container}>
+    <View style={s.container}>
+      <LinearGradient colors={examBg} style={StyleSheet.absoluteFill} start={{x:0,y:0}} end={{x:1,y:1}}/>
+
       <View style={s.header}>
-        <Text style={s.headerTitle}>
-          📝 {examLevel === 'beginner' ? 'IMTIHON' : `${examLevel.toUpperCase()} IMTIHON`}
-        </Text>
-        <Text style={s.headerSub}>
-          {items.length ? `${currentIndex + 1} / ${items.length}` : '…'}
-        </Text>
+        <TouchableOpacity style={s.backBtn} onPress={()=>router.replace('/dashboard')} activeOpacity={0.85}>
+          <Text style={s.backIcon}>←</Text>
+        </TouchableOpacity>
+        <View style={s.headerCenter}>
+          <Text style={s.headerTitle}>
+            📝 {examLevel === 'beginner' ? 'IMTIHON' : `${examLevel.toUpperCase()} IMTIHON`}
+          </Text>
+          <Text style={s.headerSub}>
+            {items.length ? `${currentIndex + 1} / ${items.length}` : '…'}
+          </Text>
+        </View>
+        <View style={s.headerSpacer}/>
       </View>
 
       <View style={s.progressWrap}>
-        <View style={[s.progressBar, { width: `${progress}%` }]} />
+        <View style={[s.progressBar, { width: `${progress}%` }]}>
+          <LinearGradient colors={[palette.gold, palette.coral]} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFill}/>
+        </View>
       </View>
 
       <View style={s.content}>
         {/* Prompt card */}
         {item ? (
           <Animated.View style={[s.letterCard, { transform: [{ scale: itemScale }] }]}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.98)','rgba(255,248,225,0.98)']}
+              style={[StyleSheet.absoluteFill,{borderRadius:radius.xl+4}]}
+              start={{x:0,y:0}} end={{x:1,y:1}}
+            />
             {item.kind === 'letter' ? (
               <Text style={s.letterText} adjustsFontSizeToFit numberOfLines={1}>
                 {item.letter}
@@ -506,8 +528,9 @@ export default function ExamScreen() {
                   🇺🇿 {item.word.uz}
                 </Text>
                 <Text style={s.wordHint}>Inglizchasini ayting</Text>
-                <TouchableOpacity style={s.listenBtn} onPress={speakCurrent}>
-                  <Text style={{ fontSize: 26 }}>🔊</Text>
+                <TouchableOpacity style={s.listenBtn} onPress={speakCurrent} activeOpacity={0.85}>
+                  <LinearGradient colors={[palette.gold, palette.sunDeep]} style={[StyleSheet.absoluteFill,{borderRadius:30}]}/>
+                  <Text style={{ fontSize: 28 }}>🔊</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -517,9 +540,15 @@ export default function ExamScreen() {
         <View style={s.rightPanel}>
           <Animated.View style={[s.feedbackBox, { opacity: feedbackOpacity }]}>
             {feedback === 'success' ? (
-              <Text style={s.successText}>To&apos;g&apos;ri! ⭐</Text>
+              <>
+                <LinearGradient colors={[palette.mint, palette.mintDeep]} style={[StyleSheet.absoluteFill,{borderRadius:radius.lg}]}/>
+                <Text style={s.successText}>To&apos;g&apos;ri! ⭐</Text>
+              </>
             ) : feedback === 'fail' ? (
-              <Text style={s.failText}>Noto&apos;g&apos;ri! 🔄</Text>
+              <>
+                <LinearGradient colors={[palette.coral, palette.coralDeep]} style={[StyleSheet.absoluteFill,{borderRadius:radius.lg}]}/>
+                <Text style={s.failText}>Noto&apos;g&apos;ri! 🔄</Text>
+              </>
             ) : (
               <Text style={s.placeholderText}> </Text>
             )}
@@ -534,22 +563,28 @@ export default function ExamScreen() {
               <Animated.View
                 style={[
                   s.micBtn,
-                  isRecording && s.micBtnRec,
                   { transform: [{ scale: micScale }] },
                 ]}
               >
+                <LinearGradient
+                  colors={isRecording ? ['#FF6B6B','#E03E3E'] : [palette.violet, '#6B2BAE']}
+                  style={[StyleSheet.absoluteFill,{borderRadius:70}]}
+                  start={{x:0,y:0}} end={{x:1,y:1}}
+                />
                 <Text style={s.micIcon}>🎙️</Text>
               </Animated.View>
             </TouchableOpacity>
             <Text style={s.micText}>
               {isChecking
-                ? 'Tekshirilmoqda...'
+                ? 'Tekshirilmoqda…'
                 : isRecording
-                  ? 'Eshitilmoqda...'
+                  ? 'Eshitilmoqda…'
                   : 'Bosib turib ayting'}
             </Text>
             {recognizedText ? (
-              <Text style={s.recText}>&quot;{recognizedText}&quot;</Text>
+              <View style={s.transcriptPill}>
+                <Text style={s.recText}>&quot;{recognizedText}&quot;</Text>
+              </View>
             ) : null}
           </View>
         </View>
@@ -562,7 +597,7 @@ export default function ExamScreen() {
         badge={victoryConfig.badge}
         icon="🏆"
       />
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -570,110 +605,95 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 30,
-    paddingTop: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.md,
   },
-  headerTitle: { fontSize: 22, fontWeight: '900', color: '#FFD700', letterSpacing: 2 },
-  headerSub: { fontSize: 18, fontWeight: '700', color: 'rgba(255,255,255,0.7)' },
+  backBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)',
+    alignItems: 'center', justifyContent: 'center',
+    ...shadowFx.soft,
+  },
+  backIcon: { color: '#FFF', fontSize: 24, fontWeight: '900', marginTop: -2 },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerSpacer: { width: 44 },
+  headerTitle: {
+    fontSize: 20, fontWeight: '900', color: palette.gold, letterSpacing: 2,
+    textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
+  },
+  headerSub: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.85)', marginTop: 2, letterSpacing: 1 },
   progressWrap: {
-    height: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    marginHorizontal: 30,
-    marginTop: 10,
-    borderRadius: 4,
-    overflow: 'hidden',
+    height: 10, marginHorizontal: spacing.lg, marginTop: 10,
+    borderRadius: 5, overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
   },
-  progressBar: { height: '100%', backgroundColor: '#FFD700', borderRadius: 4 },
+  progressBar: { height: '100%', borderRadius: 5, overflow: 'hidden' },
   content: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    padding: 20,
+    flex: 1, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'space-evenly',
+    padding: spacing.lg,
   },
   letterCard: {
-    width: '45%',
-    height: '75%',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10,
+    width: '46%', height: '80%',
+    borderRadius: radius.xl + 4,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.85)',
+    overflow: 'hidden',
+    ...shadowFx.lifted,
   },
   letterText: {
-    fontSize: 140,
-    fontWeight: '900',
-    color: '#FFF',
-    textShadowColor: 'rgba(255,215,0,0.5)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 15,
+    fontSize: 160, fontWeight: '900', color: palette.ink,
+    textShadowColor: 'rgba(255,200,70,0.35)', textShadowOffset: { width: 0, height: 6 }, textShadowRadius: 14,
     textAlign: 'center',
   },
   wordUz: {
-    fontSize: 40,
-    fontWeight: '900',
-    color: '#FFF',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 8,
+    fontSize: 44, fontWeight: '900', color: palette.ink, textAlign: 'center',
   },
   wordHint: {
-    marginTop: 18,
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '700',
-    letterSpacing: 2,
+    marginTop: 16, fontSize: 13, color: palette.inkSoft,
+    fontWeight: '800', letterSpacing: 2, textTransform: 'uppercase',
   },
   listenBtn: {
-    marginTop: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,215,0,0.6)',
+    marginTop: 20, width: 60, height: 60, borderRadius: 30,
+    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+    ...shadowFx.soft,
   },
-  rightPanel: { width: '45%', height: '80%', alignItems: 'center', justifyContent: 'center' },
+  rightPanel: { width: '46%', height: '80%', alignItems: 'center', justifyContent: 'center' },
   feedbackBox: {
-    height: 50,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    minHeight: 54, paddingHorizontal: spacing.xl,
+    justifyContent: 'center', alignItems: 'center',
+    borderRadius: radius.lg, overflow: 'hidden',
+    ...shadowFx.soft,
   },
-  placeholderText: { fontSize: 20 },
-  successText: { color: '#2ECC71', fontSize: 24, fontWeight: 'bold' },
-  failText: { color: '#E74C3C', fontSize: 24, fontWeight: 'bold' },
-  micArea: { alignItems: 'center', marginTop: 24 },
+  placeholderText: { fontSize: 20, color: 'transparent' },
+  successText: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 1 },
+  failText: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 1 },
+  micArea: { alignItems: 'center', marginTop: spacing.lg },
   micBtn: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#8E44AD',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 14,
+    width: 140, height: 140, borderRadius: 70,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 4, borderColor: 'rgba(255,255,255,0.55)',
+    overflow: 'hidden',
+    ...shadowFx.lifted,
   },
-  micBtnRec: { backgroundColor: '#C0392B', borderColor: '#FF6B6B' },
-  micIcon: { fontSize: 48 },
-  micText: { marginTop: 14, fontSize: 16, color: '#FFF', fontWeight: '700' },
-  recText: { marginTop: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' },
+  micIcon: { fontSize: 56 },
+  micText: {
+    marginTop: 16, fontSize: 16, color: '#FFF', fontWeight: '700', letterSpacing: 1,
+    textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+  },
+  transcriptPill: {
+    marginTop: 12, paddingHorizontal: spacing.lg, paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+  },
+  recText: {
+    fontSize: 13, color: 'rgba(255,255,255,0.95)', fontStyle: 'italic',
+    fontWeight: '600', textAlign: 'center',
+  },
 });

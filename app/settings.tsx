@@ -17,6 +17,7 @@ import { playSound } from '../utils/soundProvider';
 import { AppSettings, loadSettings, saveSettings, getSettings } from '../utils/settingsManager';
 import * as Haptics from 'expo-haptics';
 import { t } from '../utils/translations';
+import { palette } from '../utils/theme';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -240,15 +241,16 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#1a0a2e', '#2d1b69', '#1a0a2e']}
+        colors={['#1B3A7A', '#2E67B8', '#5DADE2']}
         style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
 
-      {/* Decorative orbs */}
-      <View style={[styles.orb, { top: -40, right: -60, backgroundColor: '#4ECDC4' }]} />
-      <View style={[styles.orb, { bottom: -50, left: -40, backgroundColor: '#C77DFF' }]} />
+      {/* Decorative glowing orbs */}
+      <View style={[styles.orb, { top: -40, right: -60, backgroundColor: palette.gold }]} />
+      <View style={[styles.orb, { bottom: -50, left: -40, backgroundColor: palette.mint }]} />
+      <View style={[styles.orb, { top: '40%', right: -80, backgroundColor: palette.rose, opacity: 0.08 }]} />
 
       <Animated.View style={[styles.content, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
         {/* Header */}
