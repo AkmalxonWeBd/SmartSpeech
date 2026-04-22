@@ -371,6 +371,10 @@ export default function WordLessonScreen() {
         }
         setTimeout(() => {
           setRevealAnswer(null);
+          // Reset fails for this word so it gets fresh 3 attempts when it returns
+          const resetFails = { ...recallFailsRef.current };
+          delete resetFails[key];
+          recallFailsRef.current = resetFails; setRecallFails(resetFails);
           setIsChecking(false); isCheckingRef.current=false;
           advanceRecall();
         }, 2600);
@@ -536,7 +540,7 @@ export default function WordLessonScreen() {
               </View>
             ) : (
               <>
-                <Text style={st.recallHint}>Inglizchada ayting{(recallFails[normalize(currentWord.en)]||0) > 0 ? `  •  ${3 - (recallFails[normalize(currentWord.en)]||0)} urinish qoldi` : ''}</Text>
+                <Text style={st.recallHint}>Inglizchada ayting{(recallFails[normalize(currentWord.en)]||0) > 0 ? `  •  ${Math.max(0, 3 - (recallFails[normalize(currentWord.en)]||0))} urinish qoldi` : ''}</Text>
                 {renderMic(currentWord.en)}
               </>
             )}
