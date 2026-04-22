@@ -38,21 +38,26 @@ export default function Wagon({
   locked,
   boss,
 }: Props) {
-  const VB_W = 260;
+  // Render at the wagon's intrinsic aspect ratio so the SVG is not
+  // pillar-boxed inside a wider wrapper. The caller still passes the
+  // logical `width` for layout, but the actual drawn width is derived
+  // from `height`, and we size the inner SVG accordingly.
+  const VB_W = 240;
   const VB_H = 200;
   const s = height / VB_H;
+  const drawW = VB_W * s;
 
   const [light, base, dark] = locked ? ['#8A8A8A', '#6A6A6A', '#3E3E3E'] : colors;
 
   const wheels = [
-    { cx: 66, cy: 152, rVB: 26 },
-    { cx: 194, cy: 152, rVB: 26 },
+    { cx: 56, cy: 152, rVB: 26 },
+    { cx: 184, cy: 152, rVB: 26 },
   ];
 
   return (
-    <View style={{ width, height }}>
+    <View style={{ width, height, alignItems: 'center', justifyContent: 'flex-end' }}>
       <Svg
-        width={width}
+        width={drawW}
         height={height}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
         pointerEvents="none"
@@ -86,47 +91,47 @@ export default function Wagon({
           </SvgGrad>
         </Defs>
 
-        <Ellipse cx={130} cy={188} rx={110} ry={7} fill="rgba(0,0,0,0.35)" />
+        <Ellipse cx={120} cy={188} rx={112} ry={7} fill="rgba(0,0,0,0.35)" />
 
-        <Rect x={-2} y={148} width={12} height={8} fill="#222" rx={1.5} />
-        <Rect x={250} y={148} width={12} height={8} fill="#222" rx={1.5} />
+        <Rect x={-6} y={148} width={14} height={8} fill="#222" rx={1.5} />
+        <Rect x={232} y={148} width={14} height={8} fill="#222" rx={1.5} />
 
-        <Rect x={12} y={140} width={236} height={16} fill="#111" rx={2} />
-        <Rect x={12} y={151} width={236} height={3} fill="rgba(255,255,255,0.12)" rx={1} />
+        <Rect x={2} y={140} width={236} height={16} fill="#111" rx={2} />
+        <Rect x={2} y={151} width={236} height={3} fill="rgba(255,255,255,0.12)" rx={1} />
 
         <G>
           <Path
-            d={`M18 72 Q18 60 30 60 L230 60 Q242 60 242 72 L242 140 L18 140 Z`}
+            d={`M8 72 Q8 60 20 60 L220 60 Q232 60 232 72 L232 140 L8 140 Z`}
             fill={`url(#body-${index})`}
             stroke={locked ? '#2F2F2F' : 'rgba(0,0,0,0.35)'}
             strokeWidth={1.5}
           />
-          <Path d="M24 66 Q130 55 236 66" stroke="rgba(255,255,255,0.45)" strokeWidth={2.5} fill="none" strokeLinecap="round" />
-          <Rect x={18} y={58} width={224} height={20} rx={12} fill={`url(#roof-${index})`} opacity={0.6} />
+          <Path d="M14 66 Q120 55 226 66" stroke="rgba(255,255,255,0.45)" strokeWidth={2.5} fill="none" strokeLinecap="round" />
+          <Rect x={8} y={58} width={224} height={20} rx={12} fill={`url(#roof-${index})`} opacity={0.6} />
 
-          <Rect x={22} y={90} width={216} height={3} fill="url(#brass2)" />
-          <Rect x={22} y={118} width={216} height={3} fill="url(#brass2)" />
+          <Rect x={12} y={90} width={216} height={3} fill="url(#brass2)" />
+          <Rect x={12} y={118} width={216} height={3} fill="url(#brass2)" />
 
           {boss ? (
             <G>
-              <Rect x={70} y={76} width={120} height={38} rx={5} fill="url(#glass)" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
-              <Path d="M74 78 L150 78 L148 92 L74 92 Z" fill="rgba(255,255,255,0.4)" />
-              <Rect x={108} y={82} width={44} height={26} rx={4} fill="url(#crown)" stroke="#5F4800" strokeWidth={1} />
+              <Rect x={60} y={76} width={120} height={38} rx={5} fill="url(#glass)" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
+              <Path d="M64 78 L140 78 L138 92 L64 92 Z" fill="rgba(255,255,255,0.4)" />
+              <Rect x={98} y={82} width={44} height={26} rx={4} fill="url(#crown)" stroke="#5F4800" strokeWidth={1} />
             </G>
           ) : (
             <G>
-              <Rect x={36} y={76} width={52} height={38} rx={4} fill="url(#glass)" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
-              <Rect x={104} y={76} width={52} height={38} rx={4} fill="url(#glass)" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
-              <Rect x={172} y={76} width={52} height={38} rx={4} fill="url(#glass)" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
-              <Path d="M38 78 L82 78 L78 96 L38 96 Z" fill="rgba(255,255,255,0.38)" />
-              <Path d="M106 78 L150 78 L146 96 L106 96 Z" fill="rgba(255,255,255,0.38)" />
-              <Path d="M174 78 L218 78 L214 96 L174 96 Z" fill="rgba(255,255,255,0.38)" />
+              <Rect x={26} y={76} width={52} height={38} rx={4} fill="url(#glass)" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
+              <Rect x={94} y={76} width={52} height={38} rx={4} fill="url(#glass)" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
+              <Rect x={162} y={76} width={52} height={38} rx={4} fill="url(#glass)" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
+              <Path d="M28 78 L72 78 L68 96 L28 96 Z" fill="rgba(255,255,255,0.38)" />
+              <Path d="M96 78 L140 78 L136 96 L96 96 Z" fill="rgba(255,255,255,0.38)" />
+              <Path d="M164 78 L208 78 L204 96 L164 96 Z" fill="rgba(255,255,255,0.38)" />
             </G>
           )}
 
           <G>
             <Rect
-              x={110}
+              x={100}
               y={120}
               width={40}
               height={18}
@@ -136,7 +141,7 @@ export default function Wagon({
               strokeWidth={1.2}
             />
             <SvgText
-              x={130}
+              x={120}
               y={133}
               fontSize={13}
               fontWeight="900"
@@ -148,14 +153,14 @@ export default function Wagon({
           </G>
 
           {[...Array(10)].map((_, i) => (
-            <Circle key={`wt-${i}`} cx={30 + i * 22} cy={70} r={1.4} fill="rgba(255,255,255,0.45)" />
+            <Circle key={`wt-${i}`} cx={20 + i * 22} cy={70} r={1.4} fill="rgba(255,255,255,0.45)" />
           ))}
           {[...Array(10)].map((_, i) => (
-            <Circle key={`wb-${i}`} cx={30 + i * 22} cy={138} r={1.4} fill="rgba(0,0,0,0.35)" />
+            <Circle key={`wb-${i}`} cx={20 + i * 22} cy={138} r={1.4} fill="rgba(0,0,0,0.35)" />
           ))}
 
-          <Rect x={18} y={60} width={6} height={80} fill="rgba(0,0,0,0.28)" />
-          <Rect x={236} y={60} width={6} height={80} fill="rgba(0,0,0,0.18)" />
+          <Rect x={8} y={60} width={6} height={80} fill="rgba(0,0,0,0.28)" />
+          <Rect x={226} y={60} width={6} height={80} fill="rgba(0,0,0,0.18)" />
         </G>
 
         <Rect x={0} y={182} width={VB_W} height={2} fill="rgba(255,255,255,0.15)" />
@@ -168,7 +173,7 @@ export default function Wagon({
             key={i}
             size={size}
             spin={wheelSpin}
-            left={w.cx * s - size / 2}
+            left={(width - drawW) / 2 + w.cx * s - size / 2}
             top={w.cy * s - size / 2}
           />
         );

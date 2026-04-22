@@ -30,9 +30,12 @@ import Wagon from '../components/dashboard/Wagon';
 import { levelVibe, palette, radius, shadowFx, spacing } from '../utils/theme';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const CAR_WIDTH = SCREEN_W / 2.6;
 const CAR_HEIGHT = SCREEN_H * 0.34;
 const LOCO_HEIGHT = SCREEN_H * 0.34;
+// Match the wagon's intrinsic aspect ratio (viewBox 240x200 => 1.2)
+// so neighbouring wagons touch at their couplings instead of having
+// visible pillar-box gaps around each SVG.
+const CAR_WIDTH = CAR_HEIGHT * 1.2;
 const TOTAL_LESSONS = 12;
 
 type UserData = { age: number; name: string; level: string; progress: number };
@@ -282,7 +285,7 @@ const carStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     height: CAR_HEIGHT + 110,
-    marginHorizontal: 2,
+    marginHorizontal: 0,
   },
   mascotSlot: {
     position: 'absolute',
@@ -392,7 +395,7 @@ const bossStyles = StyleSheet.create({
   wrapper: {
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginHorizontal: 4,
+    marginHorizontal: 0,
   },
   crownSlot: {
     position: 'absolute',

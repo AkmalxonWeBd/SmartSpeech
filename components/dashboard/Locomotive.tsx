@@ -28,42 +28,50 @@ function SmokePuff({ delay, size, offsetX }: SmokePuffProps) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let cancelled = false;
     const run = () => {
+      if (cancelled) return;
       translateY.setValue(0);
       scale.setValue(0.3);
       opacity.setValue(0);
       Animated.parallel([
         Animated.timing(translateY, {
-          toValue: -size * 3.4,
-          duration: 2600,
+          toValue: -size * 1.4,
+          duration: 2200,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(scale, {
-          toValue: 2.4,
-          duration: 2600,
+          toValue: 1.4,
+          duration: 2200,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.sequence([
           Animated.timing(opacity, {
-            toValue: 0.82,
-            duration: 350,
+            toValue: 0.75,
+            duration: 300,
             useNativeDriver: true,
           }),
           Animated.timing(opacity, {
             toValue: 0,
-            duration: 2250,
+            duration: 1800,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
         ]),
       ]).start(({ finished }) => {
-        if (finished) run();
+        if (finished && !cancelled) run();
       });
     };
     const t = setTimeout(run, delay);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      translateY.stopAnimation();
+      scale.stopAnimation();
+      opacity.stopAnimation();
+    };
   }, []);
 
   return (
@@ -312,19 +320,21 @@ export default function Locomotive({ wheelSpin, height }: Props) {
         );
       })}
 
-      {/* Smoke layer above the chimney */}
+      {/* Smoke layer above the chimney. Clipped so puffs never escape
+          into the sky/clouds layer behind the train. */}
       <View
         pointerEvents="none"
         style={{
           position: 'absolute',
           left: 96 * s,
-          top: -10 * s,
+          top: 0,
           width: 40 * s,
-          height: 70 * s,
+          height: 60 * s,
+          overflow: 'hidden',
         }}
       >
-        {[0, 500, 1000, 1500, 2000].map((d, i) => (
-          <SmokePuff key={i} delay={d} size={32 * s} offsetX={(i % 2) * 4 - 2} />
+        {[0, 600, 1200, 1800].map((d, i) => (
+          <SmokePuff key={i} delay={d} size={26 * s} offsetX={(i % 2) * 4 - 2} />
         ))}
       </View>
     </View>
