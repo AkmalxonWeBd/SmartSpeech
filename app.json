@@ -8,6 +8,7 @@
     "scheme": "smartspeech",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -16,6 +17,7 @@
       },
       "bundleIdentifier": "com.darklogicax.smartspeech"
     },
+
     "android": {
       "package": "com.darklogicax.smartspeech",
       "adaptiveIcon": {
@@ -30,10 +32,12 @@
         "android.permission.RECORD_AUDIO"
       ]
     },
+
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
       [
@@ -58,21 +62,25 @@
       "expo-speech-recognition",
       "expo-audio"
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
+
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "9b366db7-aacd-4092-9664-7bd13d01b20d"
+        "projectId": "a5a212cd-1692-491a-ac92-ba273895867f"
       }
     },
+
     "runtimeVersion": {
       "policy": "appVersion"
     },
+
     "updates": {
-      "url": "https://u.expo.dev/9b366db7-aacd-4092-9664-7bd13d01b20d"
+      "url": "https://u.expo.dev/a5a212cd-1692-491a-ac92-ba273895867f"
     }
   }
 }
