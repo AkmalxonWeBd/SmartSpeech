@@ -8,6 +8,7 @@ import { API } from '../utils/api';
 import { playSound } from '../utils/soundProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import VictoryOverlay from '../components/VictoryOverlay';
+import { palette, radius, shadowFx, spacing } from '../utils/theme';
 
 type Word = { en: string; uz: string };
 type Phase = 'learn' | 'match' | 'speak' | 'dictation' | 'recall' | 'victory';
@@ -445,14 +446,31 @@ export default function WordLessonScreen() {
     );
   }
 
+  const isA1 = level==='a1'||level==='A1';
+  const bgColors: [string, string, string] = isA1
+    ? ['#0E2B5F', '#2F80ED', '#6CB8FF']
+    : ['#1A0842', '#4B1082', '#A55BD1'];
+
   return (
-    <LinearGradient colors={level==='a1'||level==='A1'?['#1B2631','#2E4053','#2471A3']:['#1A0A2E','#2D1B69','#4A235A']} style={st.ctr}>
+    <View style={st.ctr}>
+      <LinearGradient colors={bgColors} style={StyleSheet.absoluteFill} start={{x:0,y:0}} end={{x:1,y:1}}/>
+
       {/* Header */}
       <View style={st.hdr}>
-        <Text style={st.hdrTitle}>{PHASE_NAMES[phase]}</Text>
-        <Text style={st.hdrSub}>{level.toUpperCase()} • Dars {lessonNum}</Text>
+        <TouchableOpacity style={st.backBtn} onPress={()=>router.replace('/dashboard')} activeOpacity={0.85}>
+          <Text style={st.backIcon}>←</Text>
+        </TouchableOpacity>
+        <View style={st.hdrBlock}>
+          <Text style={st.hdrTitle}>{PHASE_NAMES[phase]}</Text>
+          <Text style={st.hdrSub}>{level.toUpperCase()} • Dars {lessonNum}</Text>
+        </View>
+        <View style={st.hdrSpacer}/>
       </View>
-      <View style={st.progWrap}><View style={[st.progBar,{width:`${Math.min(progress,100)}%`}]}/></View>
+      <View style={st.progWrap}>
+        <View style={[st.progBar,{width:`${Math.min(progress,100)}%`}]}>
+          <LinearGradient colors={[palette.gold, palette.coral]} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFill}/>
+        </View>
+      </View>
 
       {renderFeedback()}
 
@@ -526,6 +544,7 @@ export default function WordLessonScreen() {
         {/* RECALL */}
         {phase==='recall' && currentWord && (
           <View style={st.recallCard}>
+            <LinearGradient colors={['rgba(255,255,255,0.08)','rgba(255,255,255,0.02)']} style={[StyleSheet.absoluteFill,{borderRadius:radius.xl}]} />
             <Text style={st.recallLabel}>🇺🇿 Tarjima:</Text>
             <Text style={st.recallUz}>{currentWord.uz}</Text>
             {revealAnswer ? (
@@ -544,19 +563,23 @@ export default function WordLessonScreen() {
           </View>
         )}
       </Animated.View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const st = StyleSheet.create({
   ctr:{flex:1},
-  loadTxt:{color:'#fff',fontSize:18,textAlign:'center'},
-  hdr:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:24,paddingTop:14},
-  hdrTitle:{fontSize:20,fontWeight:'900',color:'#FFD700',letterSpacing:1},
-  hdrSub:{fontSize:15,fontWeight:'700',color:'rgba(255,255,255,0.6)'},
-  progWrap:{height:6,backgroundColor:'rgba(255,255,255,0.12)',marginHorizontal:24,marginTop:8,borderRadius:3,overflow:'hidden'},
-  progBar:{height:'100%',backgroundColor:'#FFD700',borderRadius:3},
-  fbBox:{position:'absolute',top:'15%',alignSelf:'center',zIndex:99,paddingHorizontal:24,paddingVertical:10,borderRadius:20,backgroundColor:'rgba(0,0,0,0.7)'},
+  loadTxt:{color:'#fff',fontSize:18,textAlign:'center',fontWeight:'700'},
+  hdr:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:spacing.lg,paddingTop:spacing.md,gap:spacing.md},
+  backBtn:{width:44,height:44,borderRadius:22,backgroundColor:'rgba(255,255,255,0.25)',borderWidth:1.5,borderColor:'rgba(255,255,255,0.45)',alignItems:'center',justifyContent:'center',...shadowFx.soft},
+  backIcon:{color:'#FFF',fontSize:24,fontWeight:'900',marginTop:-2},
+  hdrBlock:{flex:1,alignItems:'center'},
+  hdrSpacer:{width:44},
+  hdrTitle:{fontSize:20,fontWeight:'900',color:palette.gold,letterSpacing:1,textShadowColor:'rgba(0,0,0,0.35)',textShadowOffset:{width:0,height:1},textShadowRadius:4},
+  hdrSub:{fontSize:13,fontWeight:'700',color:'rgba(255,255,255,0.85)',marginTop:2,letterSpacing:1},
+  progWrap:{height:10,backgroundColor:'rgba(0,0,0,0.18)',marginHorizontal:spacing.lg,marginTop:10,borderRadius:5,overflow:'hidden',borderWidth:1,borderColor:'rgba(255,255,255,0.2)'},
+  progBar:{height:'100%',borderRadius:5,overflow:'hidden'},
+  fbBox:{position:'absolute',top:'14%',alignSelf:'center',zIndex:99,paddingHorizontal:spacing.xl,paddingVertical:10,borderRadius:radius.pill,backgroundColor:'rgba(0,0,0,0.75)',borderWidth:1,borderColor:'rgba(255,255,255,0.3)',...shadowFx.lifted},
   fbOk:{color:'#2ECC71',fontSize:20,fontWeight:'bold'},
   fbFail:{color:'#E74C3C',fontSize:18,fontWeight:'bold'},
   body:{flex:1,justifyContent:'center',alignItems:'center',padding:16},

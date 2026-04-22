@@ -12,6 +12,7 @@ import { API } from '../../utils/api';
 import { playSound } from '../../utils/soundProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import VictoryOverlay from '../../components/VictoryOverlay';
+import { palette, radius, shadowFx, spacing } from '../../utils/theme';
 
 type QueueItem = 
   | { type: 'letter'; text: string }
@@ -502,17 +503,61 @@ export default function LessonScreen() {
   if (!currentItem) return null;
 
   return (
-    <LinearGradient colors={['#1B2631', '#2E4053']} style={styles.container}>
-      
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <View style={[styles.progressBar, { width: `${(currentIndex / queue.length) * 100}%` }]} />
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#1F3A7A', '#2E67B8', '#5DADE2']}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+
+      {/* Top bar with back + progress */}
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.replace('/dashboard')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.backIcon}>←</Text>
+        </TouchableOpacity>
+
+        <View style={styles.progressCard}>
+          <View style={styles.progressTrack}>
+            <Animated.View
+              style={[
+                styles.progressFill,
+                { width: `${((currentIndex + 1) / Math.max(queue.length, 1)) * 100}%` },
+              ]}
+            >
+              <LinearGradient
+                colors={[palette.gold, palette.coral]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </Animated.View>
+          </View>
+          <Text style={styles.progressText}>
+            {currentIndex + 1} / {queue.length}
+            <Text style={styles.phaseTag}>  •  {phase === 'letters' ? 'Harflar' : "So'zlar"}</Text>
+          </Text>
+        </View>
       </View>
-      
+
       <View style={styles.content}>
         <Animated.View style={[styles.itemCard, { transform: [{ scale: itemScale }] }]}>
-          
-          <TouchableOpacity style={styles.replayBtn} onPress={speakCurrentItem}>
+          <LinearGradient
+            colors={['rgba(255,255,255,0.98)', 'rgba(255,248,225,0.98)']}
+            style={[StyleSheet.absoluteFill, { borderRadius: radius.xl + 4 }]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+
+          <TouchableOpacity style={styles.replayBtn} onPress={speakCurrentItem} activeOpacity={0.8}>
+            <LinearGradient
+              colors={[palette.gold, palette.sunDeep]}
+              style={[StyleSheet.absoluteFill, { borderRadius: 28 }]}
+            />
             <Text style={styles.replayIcon}>🔊</Text>
           </TouchableOpacity>
 
@@ -521,46 +566,64 @@ export default function LessonScreen() {
           ) : (
             <View style={styles.wordContainer}>
               <Text style={styles.wordText} adjustsFontSizeToFit numberOfLines={1}>{currentItem.text}</Text>
-              <Text style={styles.translationText} adjustsFontSizeToFit numberOfLines={1}>{currentItem.translation}</Text>
+              <View style={styles.translationChip}>
+                <Text style={styles.translationText} adjustsFontSizeToFit numberOfLines={1}>{currentItem.translation}</Text>
+              </View>
             </View>
           )}
-
         </Animated.View>
 
         <View style={styles.rightPanel}>
-          {/* Feedback Message */}
           <Animated.View style={[styles.feedbackContainer, { opacity: feedbackOpacity }]}>
             {feedback === 'success' ? (
-              <Text style={styles.successText}>Zo'r! ⭐</Text>
+              <>
+                <LinearGradient
+                  colors={[palette.mint, palette.mintDeep]}
+                  style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+                />
+                <Text style={styles.successText}>Zo&apos;r! ⭐</Text>
+              </>
             ) : feedback === 'fail' ? (
-              <Text style={styles.failText}>Yana urunib ko'ring! 🔄</Text>
+              <>
+                <LinearGradient
+                  colors={[palette.coral, palette.coralDeep]}
+                  style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+                />
+                <Text style={styles.failText}>Yana urinib ko&apos;ring! 🔄</Text>
+              </>
             ) : (
-              <Text style={styles.placeholderText}> </Text> 
+              <Text style={styles.placeholderText}> </Text>
             )}
           </Animated.View>
 
-          {/* Microphone Button */}
           <View style={styles.micArea}>
-            <TouchableOpacity 
-              onPressIn={startRecording} 
+            <TouchableOpacity
+              onPressIn={startRecording}
               onPressOut={stopRecording}
               activeOpacity={0.9}
             >
-              <Animated.View style={[
-                styles.micButton, 
-                isRecording && styles.micButtonRecording,
-                { transform: [{ scale: micScale }] }
-              ]}>
+              <Animated.View
+                style={[
+                  styles.micButton,
+                  { transform: [{ scale: micScale }] },
+                ]}
+              >
+                <LinearGradient
+                  colors={isRecording ? ['#FF6B6B', '#E03E3E'] : [palette.sky, palette.skyDeep]}
+                  style={[StyleSheet.absoluteFill, { borderRadius: 70 }]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
                 <Text style={styles.micIcon}>🎙️</Text>
               </Animated.View>
             </TouchableOpacity>
             <Text style={styles.micInstruction}>
-              {isChecking ? "Tekshirilmoqda..." : isRecording ? "Eshitilmoqda..." : "Bosib turib gapiring"}
+              {isChecking ? 'Tekshirilmoqda…' : isRecording ? 'Eshitilmoqda…' : 'Bosib turib gapiring'}
             </Text>
             {recognizedText ? (
-              <Text style={styles.recognizedText}>
-                &quot;{recognizedText}&quot;
-              </Text>
+              <View style={styles.transcriptPill}>
+                <Text style={styles.recognizedText}>&quot;{recognizedText}&quot;</Text>
+              </View>
             ) : null}
           </View>
         </View>
@@ -572,140 +635,173 @@ export default function LessonScreen() {
         subtitle={`Dars ${lessonId} tugatildi`}
         icon="🏆"
       />
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingText: { color: '#FFF', fontSize: 24, textAlign: 'center' },
-  progressContainer: {
-    height: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginTop: 20,
-    marginHorizontal: 40,
-    borderRadius: 4,
-    overflow: 'hidden'
+  loadingText: { color: '#FFF', fontSize: 24, textAlign: 'center', fontWeight: '700' },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.md,
   },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#48C9B0',
-    borderRadius: 4,
+  backBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadowFx.soft,
   },
+  backIcon: { color: '#FFF', fontSize: 26, fontWeight: '900', marginTop: -2 },
+  progressCard: {
+    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', borderRadius: 5, overflow: 'hidden' },
+  progressText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 4,
+    letterSpacing: 1,
+  },
+  phaseTag: { fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
   content: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-evenly',
-    padding: 20
+    padding: spacing.lg,
   },
   itemCard: {
-    width: '45%',
-    height: '80%',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 30,
+    width: '46%',
+    height: '82%',
+    borderRadius: radius.xl + 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    borderColor: 'rgba(255,255,255,0.85)',
+    overflow: 'hidden',
+    ...shadowFx.lifted,
   },
   hugeText: {
-    fontSize: 140,
+    fontSize: 160,
     fontWeight: '900',
-    color: '#FFF',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 10,
+    color: palette.ink,
+    textShadowColor: 'rgba(255,200,70,0.35)',
+    textShadowOffset: { width: 0, height: 6 },
+    textShadowRadius: 14,
     textAlign: 'center',
   },
-  wordContainer: {
-    alignItems: 'center'
-  },
+  wordContainer: { alignItems: 'center', paddingHorizontal: spacing.lg },
   wordText: {
-    fontSize: 50,
-    fontWeight: '800',
-    color: '#FFF',
+    fontSize: 60,
+    fontWeight: '900',
+    color: palette.ink,
     textAlign: 'center',
+    letterSpacing: 1,
+  },
+  translationChip: {
+    marginTop: 16,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(47,128,237,0.12)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(47,128,237,0.35)',
   },
   translationText: {
     fontSize: 22,
-    color: '#AAB7B8',
-    marginTop: 10,
+    color: palette.inkSoft,
+    fontWeight: '700',
   },
   replayBtn: {
     position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    top: 18,
+    right: 18,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    ...shadowFx.soft,
   },
-  replayIcon: {
-    fontSize: 28,
-  },
+  replayIcon: { fontSize: 26 },
   rightPanel: {
-    width: '45%',
-    height: '80%',
+    width: '46%',
+    height: '82%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  micArea: {
-    alignItems: 'center',
-    marginTop: 30,
-  },
+  micArea: { alignItems: 'center', marginTop: spacing.xl },
   micButton: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#3498DB',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#3498DB',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 15,
-    elevation: 10,
+    overflow: 'hidden',
     borderWidth: 4,
-    borderColor: '#2980B9',
+    borderColor: 'rgba(255,255,255,0.55)',
+    ...shadowFx.lifted,
   },
-  micButtonRecording: {
-    backgroundColor: '#E74C3C',
-    borderColor: '#C0392B',
-    shadowColor: '#E74C3C',
-  },
-  micIcon: {
-    fontSize: 50,
-  },
+  micIcon: { fontSize: 56 },
   micInstruction: {
-    marginTop: 20,
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 18,
-    fontWeight: '600',
+    marginTop: 18,
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   feedbackContainer: {
-    height: 60,
-    paddingHorizontal: 30,
+    minHeight: 58,
+    paddingHorizontal: spacing.xl,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    ...shadowFx.soft,
   },
-  placeholderText: { fontSize: 24 },
-  successText: { color: '#2ECC71', fontSize: 28, fontWeight: 'bold' },
-  failText: { color: '#E74C3C', fontSize: 24, fontWeight: 'bold' },
+  placeholderText: { fontSize: 20, color: 'transparent' },
+  successText: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: 1 },
+  failText: { color: '#FFF', fontSize: 22, fontWeight: '800', letterSpacing: 0.5 },
+  transcriptPill: {
+    marginTop: 14,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
   recognizedText: {
-    marginTop: 12,
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 13,
     fontStyle: 'italic',
     textAlign: 'center',
+    fontWeight: '600',
   },
 });
