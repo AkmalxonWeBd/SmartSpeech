@@ -305,7 +305,7 @@ export default function SettingsScreen() {
           {/* App info */}
           <View style={styles.appInfo}>
             <Text style={styles.appName}>SmartSpeech 🦉</Text>
-            <Text style={styles.appVersion}>v1.0.0 • Made with DarkLogicAX</Text>
+            <Text style={styles.appVersion}>v2.0.0 • Made with DarkLogicAX and ZULFIZAR UMAROVA</Text>
           </View>
         </ScrollView>
       </Animated.View>
