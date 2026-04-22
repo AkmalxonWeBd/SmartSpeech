@@ -40,6 +40,9 @@ export default function WordLessonScreen() {
   const [showHint, setShowHint] = useState(false);
   // Recall state
   const [recallQueue, setRecallQueue] = useState<Word[]>([]);
+  const [recallFails, setRecallFails] = useState<Record<string, number>>({});
+  const [recalledCorrect, setRecalledCorrect] = useState<Record<string, boolean>>({});
+  const [revealAnswer, setRevealAnswer] = useState<string | null>(null);
 
   const isCheckingRef = useRef(false);
   const idxRef = useRef(0);
@@ -57,6 +60,10 @@ export default function WordLessonScreen() {
   useEffect(() => { wordsRef.current = words; }, [words]);
   useEffect(() => { matchQueueRef.current = matchQueue; }, [matchQueue]);
   useEffect(() => { recallQueueRef.current = recallQueue; }, [recallQueue]);
+  const recallFailsRef = useRef<Record<string, number>>({});
+  const recalledCorrectRef = useRef<Record<string, boolean>>({});
+  useEffect(() => { recallFailsRef.current = recallFails; }, [recallFails]);
+  useEffect(() => { recalledCorrectRef.current = recalledCorrect; }, [recalledCorrect]);
   useEffect(() => { isCheckingRef.current = isChecking; }, [isChecking]);
 
   useEffect(() => {
@@ -116,6 +123,9 @@ export default function WordLessonScreen() {
     } else if (p === 'recall') {
       const q = shuffle(wordsRef.current);
       setRecallQueue(q); recallQueueRef.current = q;
+      setRecallFails({}); recallFailsRef.current = {};
+      setRecalledCorrect({}); recalledCorrectRef.current = {};
+      setRevealAnswer(null);
     } else if (p === 'speak' || p === 'dictation') {
       setTimeout(() => speakWord(wordsRef.current[0]?.en || ''), 500);
     }
@@ -315,25 +325,60 @@ export default function WordLessonScreen() {
   };
 
   // === RECALL ===
+  const advanceRecall = () => {
+    const q = recallQueueRef.current;
+    const ni = idxRef.current + 1;
+    // Victory only if every unique word has been correctly recalled
+    const total = wordsRef.current.length;
+    const correctCount = Object.keys(recalledCorrectRef.current).filter(k => recalledCorrectRef.current[k]).length;
+    if (ni >= q.length) {
+      if (correctCount >= total) { handleVictory(); return; }
+      // Not all recalled — re-queue missing words at the end
+      const missing = wordsRef.current.filter(w => !recalledCorrectRef.current[normalize(w.en)]);
+      if (missing.length === 0) { handleVictory(); return; }
+      const nq = [...q, ...shuffle(missing)];
+      setRecallQueue(nq); recallQueueRef.current = nq;
+    }
+    idxRef.current = ni; setIdx(ni); animIn();
+  };
+
   const checkRecall = (rec: string, expected: string) => {
     if (!rec.trim()) { setIsChecking(false); isCheckingRef.current=false; return; }
     const nr=normalize(rec), ne=normalize(expected);
     const ok = nr.includes(ne) || ne.includes(nr) || similarity(rec,expected) >= 0.45;
+    const key = normalize(expected);
     if (ok) {
       showFB('success'); playSound('success');
+      const nc = { ...recalledCorrectRef.current, [key]: true };
+      recalledCorrectRef.current = nc; setRecalledCorrect(nc);
       setTimeout(() => {
         setIsChecking(false); isCheckingRef.current=false;
-        const q = recallQueueRef.current;
-        const ni=idxRef.current+1;
-        if (ni<q.length) { idxRef.current=ni; setIdx(ni); animIn(); }
-        else handleVictory();
+        advanceRecall();
       }, 800);
     } else {
-      showFB('fail'); playSound('error'); doShake();
-      setIsChecking(false); isCheckingRef.current=false;
-      const q = recallQueueRef.current;
-      const cur = q[idxRef.current];
-      if (cur) { const nq=[...q,cur]; setRecallQueue(nq); recallQueueRef.current=nq; }
+      const nfails = { ...recallFailsRef.current, [key]: (recallFailsRef.current[key] || 0) + 1 };
+      recallFailsRef.current = nfails; setRecallFails(nfails);
+      if (nfails[key] >= 3) {
+        // Show correct answer, speak it, then move on (word will come back at end)
+        showFB('fail'); playSound('error'); doShake();
+        setRevealAnswer(expected);
+        try { Speech.speak(expected, { language:'en-US', rate:0.7, pitch:1.05 }); } catch(_){}
+        const q = recallQueueRef.current;
+        const cur = q[idxRef.current];
+        if (cur && !recalledCorrectRef.current[normalize(cur.en)]) {
+          const nq = [...q, cur];
+          setRecallQueue(nq); recallQueueRef.current = nq;
+        }
+        setTimeout(() => {
+          setRevealAnswer(null);
+          setIsChecking(false); isCheckingRef.current=false;
+          advanceRecall();
+        }, 2600);
+      } else {
+        // Let user retry same word
+        showFB('fail'); playSound('error'); doShake();
+        setIsChecking(false); isCheckingRef.current=false;
+      }
     }
   };
 
@@ -483,8 +528,18 @@ export default function WordLessonScreen() {
           <View style={st.recallCard}>
             <Text style={st.recallLabel}>🇺🇿 Tarjima:</Text>
             <Text style={st.recallUz}>{currentWord.uz}</Text>
-            <Text style={st.recallHint}>Inglizchada ayting</Text>
-            {renderMic(currentWord.en)}
+            {revealAnswer ? (
+              <View style={st.revealBox}>
+                <Text style={st.revealLabel}>To'g'ri javob:</Text>
+                <Text style={st.revealWord}>{revealAnswer}</Text>
+                <Text style={st.revealHint}>Esda saqlang — keyinroq yana keladi</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={st.recallHint}>Inglizchada ayting{(recallFails[normalize(currentWord.en)]||0) > 0 ? `  •  ${3 - (recallFails[normalize(currentWord.en)]||0)} urinish qoldi` : ''}</Text>
+                {renderMic(currentWord.en)}
+              </>
+            )}
             <Text style={st.counter}>{idx+1} / {recallQueue.length}</Text>
           </View>
         )}
@@ -544,6 +599,10 @@ const st = StyleSheet.create({
   recallLabel:{fontSize:14,color:'rgba(255,255,255,0.4)',fontWeight:'600'},
   recallUz:{fontSize:36,fontWeight:'900',color:'#FFD700',marginVertical:12,textShadowColor:'rgba(255,215,0,0.3)',textShadowRadius:10,textShadowOffset:{width:0,height:2}},
   recallHint:{fontSize:14,color:'rgba(255,255,255,0.4)',marginBottom:8},
+  revealBox:{marginTop:12,marginBottom:12,paddingHorizontal:24,paddingVertical:18,borderRadius:20,backgroundColor:'rgba(231,76,60,0.12)',borderWidth:1.5,borderColor:'rgba(231,76,60,0.35)',alignItems:'center'},
+  revealLabel:{fontSize:13,color:'rgba(255,255,255,0.6)',fontWeight:'700',letterSpacing:1,marginBottom:6},
+  revealWord:{fontSize:38,fontWeight:'900',color:'#FFF',textShadowColor:'rgba(255,215,0,0.4)',textShadowRadius:12,textShadowOffset:{width:0,height:2}},
+  revealHint:{fontSize:12,color:'rgba(255,255,255,0.45)',marginTop:8,fontStyle:'italic'},
   // Victory
 
 });
