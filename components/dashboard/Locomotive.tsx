@@ -28,7 +28,9 @@ function SmokePuff({ delay, size, offsetX }: SmokePuffProps) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let cancelled = false;
     const run = () => {
+      if (cancelled) return;
       translateY.setValue(0);
       scale.setValue(0.3);
       opacity.setValue(0);
@@ -59,11 +61,17 @@ function SmokePuff({ delay, size, offsetX }: SmokePuffProps) {
           }),
         ]),
       ]).start(({ finished }) => {
-        if (finished) run();
+        if (finished && !cancelled) run();
       });
     };
     const t = setTimeout(run, delay);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      translateY.stopAnimation();
+      scale.stopAnimation();
+      opacity.stopAnimation();
+    };
   }, []);
 
   return (
