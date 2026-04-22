@@ -2,9 +2,9 @@
   "expo": {
     "name": "SmartSpeech",
     "slug": "SmartSpeech",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "landscape",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon.jpg",
     "scheme": "smartspeech",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
