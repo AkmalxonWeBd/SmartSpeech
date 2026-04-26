@@ -29,7 +29,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
 
@@ -68,6 +69,8 @@
       "reactCompiler": true
     },
 
+    "owner": "darklogic.ax",
+
     "extra": {
       "router": {},
       "eas": {
@@ -80,7 +83,9 @@
     },
 
     "updates": {
-      "url": "https://u.expo.dev/a5a212cd-1692-491a-ac92-ba273895867f"
+      "url": "https://u.expo.dev/a5a212cd-1692-491a-ac92-ba273895867f",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

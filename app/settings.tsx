@@ -1,23 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  Animated,
-  Easing,
-  TouchableOpacity,
-  Switch,
-  ScrollView,
-  Platform,
-} from 'react-native';
-import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { playSound } from '../utils/soundProvider';
-import { AppSettings, loadSettings, saveSettings, getSettings } from '../utils/settingsManager';
 import * as Haptics from 'expo-haptics';
-import { t } from '../utils/translations';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import {
+    Animated,
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { AppSettings, getSettings, loadSettings, saveSettings } from '../utils/settingsManager';
+import { playSound } from '../utils/soundProvider';
 import { palette } from '../utils/theme';
+import { t } from '../utils/translations';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
