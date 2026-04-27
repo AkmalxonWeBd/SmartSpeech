@@ -1,26 +1,24 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  Easing,
-  Dimensions,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  ScrollView,
-} from 'react-native';
-import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { API } from '../utils/api';
-import { downloadAllMissingVideos } from '../utils/videoDownloader';
-import Backdrop, { BackdropVariant } from '../components/dashboard/Backdrop';
 import { getAssetModule } from '../utils/assetManager';
+import { loadSettings } from '../utils/settingsManager';
 import { playSound } from '../utils/soundProvider';
 import { t } from '../utils/translations';
-import { loadSettings } from '../utils/settingsManager';
+import { downloadAllMissingVideos } from '../utils/videoDownloader';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -656,6 +654,7 @@ export default function OnboardingScreen() {
         if (level === 'beginner') {
           setIsDownloading(true);
           setDownloadStatus(t('splashLoading') || 'Downloading assets...');
+          await requestStoragePermission();
           const success = await downloadAllMissingVideos((current, total) => {
             setDownloadStatus(`Downloading videos... ${current}/${total}`);
             setDownloadProgress(current / total);

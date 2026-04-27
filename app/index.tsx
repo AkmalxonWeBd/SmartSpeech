@@ -1,23 +1,23 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Dimensions,
-  Easing,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { preloadSounds, playSound } from '../utils/soundProvider';
-import { t } from '../utils/translations';
-import { loadSettings } from '../utils/settingsManager';
-import { downloadCoreAssets } from '../utils/assetManager';
-import { downloadAllMissingVideos, ALL_VIDEOS } from '../utils/videoDownloader';
+import { router } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import {
+    Animated,
+    Dimensions,
+    Easing,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
 import Backdrop from '../components/dashboard/Backdrop';
 import Locomotive from '../components/dashboard/Locomotive';
+import { downloadCoreAssets } from '../utils/assetManager';
+import { loadSettings } from '../utils/settingsManager';
+import { playSound, preloadSounds } from '../utils/soundProvider';
 import { palette, radius, shadowFx, spacing } from '../utils/theme';
+import { t } from '../utils/translations';
+import { downloadAllMissingVideos, requestStoragePermission } from '../utils/videoDownloader';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SPLASH_DURATION = 5500;
@@ -98,6 +98,7 @@ export default function SplashScreen() {
         if (userDataStr) {
           const userData = JSON.parse(userDataStr);
           if (userData.level === 'beginner') {
+            await requestStoragePermission();
             await downloadAllMissingVideos((current, total) => {
               setDownloadStatus(`Downloading assets... ${current}/${total}`);
               loadingProgress.setValue(current / total);
