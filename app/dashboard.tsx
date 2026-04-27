@@ -1,35 +1,33 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  Animated,
-  Dimensions,
-  Easing,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import Svg, {
-  Circle,
-  Defs,
-  LinearGradient as SvgGrad,
-  Path,
-  Rect,
-  Stop,
+    Circle,
+    Defs,
+    Rect,
+    Stop,
+    LinearGradient as SvgGrad
 } from 'react-native-svg';
-import { playSound } from '../utils/soundProvider';
-import { startBackgroundMusic, stopBackgroundMusic } from '../utils/backgroundMusic';
-import { t } from '../utils/translations';
-import { API } from '../utils/api';
 import Backdrop, { BackdropVariant } from '../components/dashboard/Backdrop';
-import Mascot, { BOSS_MASCOT, LESSON_MASCOTS } from '../components/dashboard/Mascot';
 import Locomotive from '../components/dashboard/Locomotive';
+import Mascot, { BOSS_MASCOT, LESSON_MASCOTS } from '../components/dashboard/Mascot';
 import Wagon from '../components/dashboard/Wagon';
+import { API } from '../utils/api';
+import { startBackgroundMusic, stopBackgroundMusic } from '../utils/backgroundMusic';
+import { playSound } from '../utils/soundProvider';
 import { levelVibe, palette, radius, shadowFx, spacing } from '../utils/theme';
+import { t } from '../utils/translations';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CAR_HEIGHT = SCREEN_H * 0.34;
@@ -151,16 +149,6 @@ function LessonCar({
   const handlePress = async () => {
     if (!isUnlocked) return;
     playSound('click');
-
-    if (level === 'beginner' && index === 1) {
-      const watched = await AsyncStorage.getItem('intro_video_watched');
-      if (!watched) await AsyncStorage.setItem('intro_video_watched', 'true');
-      router.push({
-        pathname: '/intro-video',
-        params: { nextRoute: `/lesson/${index}`, canSkip: watched ? 'true' : 'false' },
-      });
-      return;
-    }
 
     if (level === 'a1' || level === 'a2') {
       router.push({
