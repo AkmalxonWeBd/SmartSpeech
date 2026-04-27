@@ -1,10 +1,12 @@
+import Slider from '@react-native-community/slider';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useEffect, useRef, useState } from 'react';
 import {
     Animated,
-    Dimensions,
+    Platform,
     ScrollView,
     StyleSheet,
     Switch,
@@ -12,12 +14,11 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { resumeBackgroundMusic, setBackgroundMusicVolume, stopBackgroundMusic } from '../utils/backgroundMusic';
 import { AppSettings, getSettings, loadSettings, saveSettings } from '../utils/settingsManager';
 import { playSound } from '../utils/soundProvider';
 import { palette } from '../utils/theme';
 import { t } from '../utils/translations';
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 type LanguageOption = { id: 'uz' | 'en' | 'ru'; name: string; flag: string; nativeName: string };
 
@@ -209,9 +210,31 @@ export default function SettingsScreen() {
   const [settings, setSettings] = useState<AppSettings>(getSettings());
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(40)).current;
+  const [modelStatus, setModelStatus] = useState<'not_downloaded' | 'downloading' | 'downloaded' | 'error' | 'checking'>('checking');
+
+  const checkModelStatus = async () => {
+    if (Platform.OS !== 'android') return;
+    try {
+      const status = await ExpoSpeechRecognitionModule.androidGetOfflineModelStatus({ locale: 'en-US' });
+      if (status.status === 'downloaded') setModelStatus('downloaded');
+      else if (status.status === 'downloading') setModelStatus('downloading');
+      else setModelStatus('not_downloaded');
+    } catch (e) {
+      console.warn('Failed to check model status', e);
+      setModelStatus('error');
+    }
+  };
 
   useEffect(() => {
     loadSettings().then((s) => setSettings(s));
+    if (Platform.OS === 'android') {
+      checkModelStatus();
+      // Poll while downloading
+      const interval = setInterval(() => {
+        if (modelStatus === 'downloading') checkModelStatus();
+      }, 3000);
+      return () => clearInterval(interval);
+    }
 
     Animated.parallel([
       Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }),
@@ -228,6 +251,18 @@ export default function SettingsScreen() {
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {}
+    }
+  };
+
+  const handleDownloadModel = async () => {
+    if (Platform.OS !== 'android') return;
+    playSound('click');
+    setModelStatus('downloading');
+    try {
+      await ExpoSpeechRecognitionModule.androidTriggerOfflineModelDownload({ locale: 'en-US' });
+    } catch (e) {
+      console.warn('Failed to start download', e);
+      setModelStatus('error');
     }
   };
 
@@ -299,6 +334,96 @@ export default function SettingsScreen() {
             selected={settings.language}
             onSelect={(lang) => updateSetting('language', lang)}
           />
+
+          {/* Section: Offline Recognition */}
+          <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{t('offlineSection')}</Text>
+
+          <SettingsToggle
+            icon="📡"
+            title={t('offlineTitle')}
+            subtitle={t('offlineSubtitle')}
+            value={settings.offlineRecognition}
+            onToggle={(v) => updateSetting('offlineRecognition', v)}
+          />
+
+          {Platform.OS === 'android' && (
+            <View style={styles.offlineBox}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
+                style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+              />
+              <View style={styles.offlineHeader}>
+                <Text style={styles.offlineLabel}>🇺🇸 English (US)</Text>
+                <Text style={[
+                  styles.statusBadge,
+                  modelStatus === 'downloaded' && styles.statusOk,
+                  modelStatus === 'downloading' && styles.statusWait,
+                  modelStatus === 'error' && styles.statusErr
+                ]}>
+                  {modelStatus === 'downloaded' ? t('modelAvailable') :
+                   modelStatus === 'downloading' ? t('modelDownloading') :
+                   modelStatus === 'error' ? t('modelError') : t('modelNotDownloaded')}
+                </Text>
+              </View>
+              
+              {modelStatus !== 'downloaded' && (
+                <TouchableOpacity 
+                  style={[styles.downloadBtn, modelStatus === 'downloading' && { opacity: 0.6 }]}
+                  onPress={handleDownloadModel}
+                  disabled={modelStatus === 'downloading'}
+                >
+                  <Text style={styles.downloadBtnTxt}>{t('downloadModelBtn')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Section: Background Music */}
+          <Text style={[styles.sectionTitle, { marginTop: 16 }]}>{t('bgMusicSection')}</Text>
+
+          <SettingsToggle
+            icon="🎵"
+            title={t('bgMusicTitle')}
+            subtitle={t('bgMusicSubtitle')}
+            value={settings.backgroundMusicEnabled}
+            onToggle={(v) => {
+              updateSetting('backgroundMusicEnabled', v);
+              if (!v) stopBackgroundMusic();
+              else resumeBackgroundMusic();
+            }}
+          />
+
+          {settings.backgroundMusicEnabled && (
+            <View style={styles.volumeBox}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
+                style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+              />
+              <View style={styles.volumeHeader}>
+                <View style={styles.volumeIconBox}>
+                  <Text style={{ fontSize: 22 }}>🔉</Text>
+                </View>
+                <Text style={styles.volumeLabel}>{t('bgMusicVolume')}</Text>
+                <Text style={styles.volumeValue}>{Math.round(settings.backgroundMusicVolume * 100)}%</Text>
+              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={1}
+                step={0.05}
+                value={settings.backgroundMusicVolume}
+                onValueChange={(v: number) => {
+                  setBackgroundMusicVolume(v);
+                }}
+                onSlidingComplete={(v: number) => {
+                  updateSetting('backgroundMusicVolume', v);
+                }}
+                minimumTrackTintColor={palette.mint}
+                maximumTrackTintColor="rgba(255,255,255,0.15)"
+                thumbTintColor="#FFF"
+              />
+            </View>
+          )}
 
           {/* App info */}
           <View style={styles.appInfo}>
@@ -384,5 +509,95 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.2)',
     marginTop: 4,
+  },
+  offlineBox: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginBottom: 12,
+  },
+  offlineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  offlineLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  volumeBox: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginBottom: 12,
+  },
+  volumeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  volumeIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  volumeLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  volumeValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: palette.gold,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  statusBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: palette.gold,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255,215,0,0.1)',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  statusOk: {
+    color: '#2ECC71',
+    backgroundColor: 'rgba(46,204,113,0.1)',
+  },
+  statusWait: {
+    color: palette.mint,
+    backgroundColor: 'rgba(78,205,196,0.1)',
+  },
+  statusErr: {
+    color: '#E74C3C',
+    backgroundColor: 'rgba(231,76,60,0.1)',
+  },
+  downloadBtn: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  downloadBtnTxt: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

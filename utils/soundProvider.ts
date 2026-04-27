@@ -1,8 +1,8 @@
-import { createAudioPlayer } from 'expo-audio';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { getSettings } from './settingsManager';
 import { getAssetModule } from './assetManager';
 
-let players: { [key: string]: any } = {};
+let players: Record<string, AudioPlayer> = {};
 
 const SOUND_FILES: Record<string, string> = {
   pop: 'pop.mp3',

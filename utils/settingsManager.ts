@@ -6,12 +6,18 @@ export type AppSettings = {
   soundEnabled: boolean;
   vibrationEnabled: boolean;
   language: 'uz' | 'en' | 'ru';
+  offlineRecognition: boolean;
+  backgroundMusicEnabled: boolean;
+  backgroundMusicVolume: number;
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
   soundEnabled: true,
   vibrationEnabled: true,
   language: 'uz',
+  offlineRecognition: false,
+  backgroundMusicEnabled: true,
+  backgroundMusicVolume: 0.4,
 };
 
 let cachedSettings: AppSettings = { ...DEFAULT_SETTINGS };

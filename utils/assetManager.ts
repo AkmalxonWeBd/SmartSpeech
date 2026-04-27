@@ -10,7 +10,7 @@
 import { Asset } from 'expo-asset';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
-const ASSETS: Record<'sounds' | 'images' | 'videos', Record<string, number>> = {
+const ASSETS: Record<'sounds' | 'images', Record<string, number>> = {
   sounds: {
     'pop.mp3': require('../assets/sounds/pop.mp3'),
     'click.mp3': require('../assets/sounds/click.mp3'),
@@ -20,9 +20,6 @@ const ASSETS: Record<'sounds' | 'images' | 'videos', Record<string, number>> = {
   },
   images: {
     'login_page_loading.jpg': require('../assets/images/login_page_loading.jpg'),
-  },
-  videos: {
-    'harflar.mp4': require('../assets/videos/harflar.mp4'),
   },
 };
 /* eslint-enable @typescript-eslint/no-require-imports */

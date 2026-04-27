@@ -14,6 +14,7 @@ import { preloadSounds, playSound } from '../utils/soundProvider';
 import { t } from '../utils/translations';
 import { loadSettings } from '../utils/settingsManager';
 import { downloadCoreAssets } from '../utils/assetManager';
+import { downloadAllMissingVideos, ALL_VIDEOS } from '../utils/videoDownloader';
 import Backdrop from '../components/dashboard/Backdrop';
 import Locomotive from '../components/dashboard/Locomotive';
 import { palette, radius, shadowFx, spacing } from '../utils/theme';
@@ -67,6 +68,7 @@ function TwinkleStar({ delay, x, y, size }: { delay: number; x: number; y: numbe
 
 export default function SplashScreen() {
   const [percent, setPercent] = useState(0);
+  const [downloadStatus, setDownloadStatus] = useState<string>('');
 
   const loadingProgress = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
@@ -86,9 +88,23 @@ export default function SplashScreen() {
   useEffect(() => {
     const initialize = async () => {
       try {
+        setDownloadStatus(t('splashLoading'));
         await loadSettings();
         await downloadCoreAssets(() => {});
         await preloadSounds();
+
+        // Download missing videos if user is beginner
+        const userDataStr = await AsyncStorage.getItem('user_data');
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          if (userData.level === 'beginner') {
+            await downloadAllMissingVideos((current, total) => {
+              setDownloadStatus(`Downloading assets... ${current}/${total}`);
+              loadingProgress.setValue(current / total);
+            });
+          }
+        }
+
         playSound('magic');
       } catch (e) {
         console.warn('Initialization failed', e);
@@ -135,7 +151,8 @@ export default function SplashScreen() {
       ]),
     ]).start();
 
-    // Loading bar fills over splash duration
+    // Loading bar will be controlled by download progress instead of time
+    // If videos are already downloaded, we just jump to 100% quickly.
     Animated.timing(loadingProgress, {
       toValue: 1,
       duration: SPLASH_DURATION - 500,
@@ -261,7 +278,7 @@ export default function SplashScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
-        <Text style={styles.loadLabel}>{t('splashLoading')}</Text>
+        <Text style={styles.loadLabel}>{downloadStatus || t('splashLoading')}</Text>
 
         <View style={styles.barOuter}>
           <View style={styles.barTrack} />

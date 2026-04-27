@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Animated,
   Dimensions,
   Easing,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +12,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import Svg, {
   Circle,
   Defs,
@@ -21,6 +22,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { playSound } from '../utils/soundProvider';
+import { startBackgroundMusic, stopBackgroundMusic } from '../utils/backgroundMusic';
 import { t } from '../utils/translations';
 import { API } from '../utils/api';
 import Backdrop, { BackdropVariant } from '../components/dashboard/Backdrop';
@@ -383,7 +385,7 @@ function BossCar({
         <View style={[bossStyles.label, !isUnlocked && { backgroundColor: 'rgba(0,0,0,0.35)' }]}>
           <Text style={bossStyles.labelTitle}>{t('bossTitle')}</Text>
           <Text style={bossStyles.labelSub}>
-            {isUnlocked ? t('bossSubtitle') : 'Barcha darslarni tugating'}
+            {isUnlocked ? t('bossSubtitle') : t('bossLocked')}
           </Text>
         </View>
       </Animated.View>
@@ -508,13 +510,8 @@ export default function DashboardScreen() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const localData = await AsyncStorage.getItem('user_data');
-        if (localData) setUserData(JSON.parse(localData));
-        const backendUser = await API.getUser();
-        if (backendUser) {
-          setUserData(backendUser);
-          await AsyncStorage.setItem('user_data', JSON.stringify(backendUser));
-        }
+        const user = await API.getUser();
+        if (user) setUserData(user);
       } catch (e) {
         console.warn('Failed to load user data', e);
       }
@@ -546,6 +543,20 @@ export default function DashboardScreen() {
   }, []);
 
   const level = userData?.level || 'beginner';
+
+  useFocusEffect(
+    useCallback(() => {
+      // Start music when dashboard comes into focus
+      if (userData) {
+        startBackgroundMusic(level);
+      }
+      return () => {
+        // Stop music when navigating away from dashboard
+        stopBackgroundMusic();
+      };
+    }, [level, userData])
+  );
+
   const vibe = vibes[level] || vibes.beginner;
   const wheelSpin = wheelRotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
@@ -575,6 +586,11 @@ export default function DashboardScreen() {
           { transform: [{ translateY: headerSlide }], opacity: headerFade },
         ]}
       >
+        <Image
+          source={require('../assets/images/login_page_loading.jpg')}
+          style={styles.headerLogo}
+          resizeMode="cover"
+        />
         <View style={styles.greetingCard}>
           <LinearGradient
             colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.04)']}
@@ -704,9 +720,9 @@ function LevelUpBanner({ targetLevel }: { targetLevel: string }) {
         <Animated.View
           style={[bannerStyles.shine, { transform: [{ translateX: shimmerX }, { rotate: '18deg' }] }]}
         />
-        <Text style={bannerStyles.kicker}>YANGI BOSQICH</Text>
+        <Text style={bannerStyles.kicker}>{t('newLevel')}</Text>
         <Text style={bannerStyles.title}>{label}</Text>
-        <Text style={bannerStyles.subtitle}>ochildi!</Text>
+        <Text style={bannerStyles.subtitle}>{t('unlocked')}</Text>
       </Animated.View>
     </Animated.View>
   );
@@ -776,6 +792,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     zIndex: 100,
+  },
+  headerLogo: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    marginRight: spacing.md,
   },
   greetingCard: {
     flex: 1,

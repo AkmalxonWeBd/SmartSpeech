@@ -15,6 +15,8 @@ import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { API } from '../utils/api';
+import { downloadAllMissingVideos } from '../utils/videoDownloader';
+import Backdrop, { BackdropVariant } from '../components/dashboard/Backdrop';
 import { getAssetModule } from '../utils/assetManager';
 import { playSound } from '../utils/soundProvider';
 import { t } from '../utils/translations';
@@ -293,6 +295,7 @@ function NameInput({ value, onChange }: { value: string; onChange: (v: string) =
           <LinearGradient
             colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
             style={StyleSheet.absoluteFill}
+            pointerEvents="none"
           />
           <TextInput
             value={value}
@@ -346,11 +349,15 @@ const nameStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   input: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
     paddingHorizontal: 24,
     fontSize: 20,
     color: '#fff',
     fontWeight: '600',
     textAlign: 'center',
+    outlineStyle: 'none',
   },
   greeting: {
     fontSize: 16,
@@ -551,6 +558,9 @@ export default function OnboardingScreen() {
   const [age, setAge] = useState(7);
   const [name, setName] = useState('');
   const [level, setLevel] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState('');
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   // Transition animations
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -638,20 +648,25 @@ export default function OnboardingScreen() {
       animateToNextStep(2);
     } else if (step === 2) {
       if (!level) return;
-      // Save data locally and sync with backend
       try {
         playSound('success');
-        const userDataObj = { age, name: name.trim(), level };
-        const userDataStr = JSON.stringify(userDataObj);
-        await AsyncStorage.setItem('user_data', userDataStr);
-        
-        // Backend Sync
+        const userDataObj = { age, name: name.trim(), level, progress: 1 };
         await API.syncUser(userDataObj);
+        
+        if (level === 'beginner') {
+          setIsDownloading(true);
+          setDownloadStatus(t('splashLoading') || 'Downloading assets...');
+          const success = await downloadAllMissingVideos((current, total) => {
+            setDownloadStatus(`Downloading videos... ${current}/${total}`);
+            setDownloadProgress(current / total);
+          });
+          setIsDownloading(false);
+        }
         
         router.replace('/dashboard');
       } catch (e) {
-        console.error('Save or Sync failed', e);
-        // Fallback: navigate anyway if local save worked
+        console.error('Save failed', e);
+        setIsDownloading(false);
         router.replace('/dashboard');
       }
     }
@@ -820,6 +835,22 @@ export default function OnboardingScreen() {
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {/* Downloading Overlay */}
+      {isDownloading && (
+        <View style={styles.downloadOverlay}>
+          <LinearGradient
+            colors={['rgba(26,10,46,0.95)', 'rgba(15,52,96,0.95)']}
+            style={StyleSheet.absoluteFill}
+          />
+          <Text style={{ fontSize: 40, marginBottom: 20 }}>🎬</Text>
+          <Text style={styles.downloadStatus}>{downloadStatus}</Text>
+          <View style={styles.downloadBarOuter}>
+            <View style={[styles.downloadBarInner, { width: `${Math.round(downloadProgress * 100)}%` }]} />
+          </View>
+          <Text style={styles.downloadPercent}>{Math.round(downloadProgress * 100)}%</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -944,5 +975,36 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     letterSpacing: 1,
+  },
+  downloadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 999,
+  },
+  downloadStatus: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 20,
+    letterSpacing: 1,
+  },
+  downloadBarOuter: {
+    width: '60%',
+    height: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  downloadBarInner: {
+    height: '100%',
+    backgroundColor: '#4ECDC4',
+    borderRadius: 6,
+  },
+  downloadPercent: {
+    color: '#4ECDC4',
+    fontSize: 16,
+    fontWeight: '800',
   },
 });

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { useVideoPlayer, VideoView, VideoPlayerStatus } from 'expo-video';
 import { router, useLocalSearchParams } from 'expo-router';
-import { getAssetModule } from '../utils/assetManager';
+import { getLocalVideoUri } from '../utils/videoDownloader';
+import SmartSpeechWatermark from '../components/SmartSpeechWatermark';
 
 const VIDEO_FILE = 'harflar.mp4';
 
@@ -10,8 +11,17 @@ export default function IntroVideoScreen() {
   const { nextRoute, canSkip } = useLocalSearchParams();
   const [errored, setErrored] = useState(false);
 
-  // Offline rejim — `require(...)` orqali bundle qilingan asset ID.
-  const videoSource = getAssetModule('videos', VIDEO_FILE) ?? null;
+  const [videoSource, setVideoSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    getLocalVideoUri('harflar').then((uri) => {
+      setVideoSource(uri);
+      if (uri) {
+        player.replace({ uri });
+        player.play();
+      }
+    });
+  }, []);
 
   const player = useVideoPlayer(videoSource, (p) => {
     p.loop = false;
@@ -44,13 +54,21 @@ export default function IntroVideoScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player]);
 
-  if (errored || videoSource == null) {
+  if (errored) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.loadingText}>Video topilmadi</Text>
+        <Text style={styles.loadingText}>Video yuklashda xatolik</Text>
         <TouchableOpacity style={styles.skipButton} onPress={handleFinish}>
           <Text style={styles.skipText}>Davom etish ▶</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (videoSource == null) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.loadingText}>Video yuklanmoqda...</Text>
       </View>
     );
   }
@@ -65,6 +83,8 @@ export default function IntroVideoScreen() {
         allowsPictureInPicture={false}
         nativeControls={false}
       />
+
+      <SmartSpeechWatermark />
 
       {canSkip === 'true' && (
         <TouchableOpacity

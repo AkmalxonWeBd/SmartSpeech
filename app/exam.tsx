@@ -16,85 +16,20 @@ import {
 import * as Speech from 'expo-speech';
 import { playSound } from '../utils/soundProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const wordsDB: WordsEntry[] = require('../assets/data/words.json');
+import { getSettings } from '../utils/settingsManager';
 import VictoryOverlay from '../components/VictoryOverlay';
 import { palette, radius, shadowFx, spacing } from '../utils/theme';
+import { normalize, similarity, cleanTranscript, shuffle } from '../utils/textUtils';
+import { LETTER_PHONETICS, matchesLetter, pickBestMatch } from '../utils/letterPhonetics';
+import { t } from '../utils/translations';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const wordsDB: WordsEntry[] = require('../assets/data/words.json');
 
 type Word = { en: string; uz: string };
 type WordsEntry = { level: string; lesson: number; words: Word[] };
 
 const ALL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-
-// Phonetic matcher for single-letter utterances (beginner exam).
-const LETTER_PHONETICS: Record<string, string[]> = {
-  a: ['a', 'ay', 'hey', 'eh', 'aye', 'aa', 'ah'],
-  b: ['b', 'be', 'bee', 'bees', 'beef', 'beat'],
-  c: ['c', 'see', 'sea', 'si', 'seed', 'seen', 'she'],
-  d: ['d', 'de', 'dee', 'did', 'the', 'deep', 'deal'],
-  e: ['e', 'ee', 'he', 'each', 'eat', 'ease', 'east'],
-  f: ['f', 'ef', 'eff', 'if', 'of', 'off', 'half'],
-  g: ['g', 'ge', 'gee', 'ji', 'jee', 'jeep', 'gene'],
-  h: ['h', 'age', 'ache', 'aitch', 'each', 'hey', 'hate', 'eight', 'ate'],
-  i: ['i', 'eye', 'ai', 'aye', 'hi', 'ice'],
-  j: ['j', 'jay', 'je', 'jae', 'day', 'jade', 'jail', 'jane'],
-  k: ['k', 'kay', 'ke', 'key', 'ok', 'okay', 'cake', 'kate'],
-  l: ['l', 'el', 'ell', 'ale', 'all', 'ill', 'elle'],
-  m: ['m', 'em', 'am', 'him', 'mm', 'hmm', 'them'],
-  n: ['n', 'en', 'in', 'an', 'and', 'end'],
-  o: ['o', 'oh', 'oo', 'ooh', 'owe', 'own'],
-  p: ['p', 'pe', 'pee', 'pea', 'pi', 'peace', 'piece', 'peak'],
-  q: ['q', 'queue', 'cue', 'cu', 'que', 'cute', 'few'],
-  r: ['r', 'are', 'ar', 'our', 'or', 'err', 'her'],
-  s: ['s', 'es', 'yes', 'as', 'is', 'us', 'ass', 'ace'],
-  t: ['t', 'te', 'tea', 'tee', 'ti', 'the', 'tree', 'teeth'],
-  u: ['u', 'you', 'yu', 'yew', 'hue', 'who', 'ooh', 'ew'],
-  v: ['v', 've', 'vee', 'vi', 'we', 'fee', 'free', 'vie'],
-  w: ['w', 'double you', 'double u', 'doubleyou', 'dub', 'double'],
-  x: ['x', 'ex', 'ax', 'eggs', 'acts', 'axe'],
-  y: ['y', 'why', 'wie', 'wi', 'wye', 'wise'],
-  z: ['z', 'zee', 'zed', 'ze', 'said', 'set', 'sit'],
-};
-
-const normalize = (t: string) =>
-  t.toLowerCase().trim().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ');
-
-const cleanTranscript = (text: string): string =>
-  text.replace(/\benglish\b/gi, '').replace(/\s+/g, ' ').trim();
-
-const similarity = (a: string, b: string): number => {
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (na === nb) return 1;
-  if (na.length < 2 || nb.length < 2) {
-    if (na.includes(nb) || nb.includes(na)) return 0.8;
-    return 0;
-  }
-  const bigrams = (s: string) => {
-    const m = new Map<string, number>();
-    for (let i = 0; i < s.length - 1; i++) {
-      const bi = s.substring(i, i + 2);
-      m.set(bi, (m.get(bi) || 0) + 1);
-    }
-    return m;
-  };
-  const b1 = bigrams(na);
-  const b2 = bigrams(nb);
-  let mt = 0;
-  b1.forEach((c, bi) => {
-    mt += Math.min(c, b2.get(bi) || 0);
-  });
-  return (2 * mt) / (na.length - 1 + nb.length - 1);
-};
-
-function shuffle<T>(arr: T[]): T[] {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 // Word pool builder: for A1 exam pull words across all A1 lessons;
 // for A2 pull across both A1 + A2 lessons. Ensures every lesson is
@@ -190,18 +125,6 @@ export default function ExamScreen() {
     isCheckingRef.current = isChecking;
   }, [isChecking]);
 
-  const matchesLetter = (recognized: string, letter: string): boolean => {
-    const nr = normalize(recognized);
-    const ll = letter.toLowerCase();
-    const phonetics = LETTER_PHONETICS[ll] || [ll];
-    for (const v of phonetics) {
-      if (nr === v || nr.includes(v)) return true;
-      if (nr.split(' ').some((w) => w === v)) return true;
-    }
-    if (nr.includes(ll)) return true;
-    return false;
-  };
-
   const matchesWord = (recognized: string, expected: string): boolean => {
     const nr = normalize(recognized);
     const ne = normalize(expected);
@@ -209,27 +132,6 @@ export default function ExamScreen() {
     if (nr === ne) return true;
     if (nr.includes(ne) || ne.includes(nr)) return true;
     return similarity(recognized, expected) >= 0.5;
-  };
-
-  const pickBest = (candidates: string[], expected: string, isLetter: boolean): string => {
-    if (!candidates.length) return '';
-    let best = candidates[0];
-    let bestScore = -1;
-    for (const c of candidates) {
-      const score = isLetter
-        ? matchesLetter(c, expected)
-          ? 1
-          : 0
-        : (normalize(c).includes(normalize(expected)) ||
-            normalize(expected).includes(normalize(c)))
-          ? 1
-          : similarity(c, expected);
-      if (score > bestScore) {
-        bestScore = score;
-        best = c;
-      }
-    }
-    return best;
   };
 
   useSpeechRecognitionEvent('result', (event) => {
@@ -251,15 +153,11 @@ export default function ExamScreen() {
       setIsRecording(false);
       Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
 
-      if (item.kind === 'letter') {
-        const candidates = all.map(cleanTranscript);
-        const chosen = pickBest(candidates, item.letter, true);
-        checkResult(chosen || cleaned);
-      } else {
-        const candidates = all.map(cleanTranscript);
-        const chosen = pickBest(candidates, item.word.en, false);
-        checkResult(chosen || cleaned);
-      }
+      const isLetter = item.kind === 'letter';
+      const expected = isLetter ? item.letter : item.word.en;
+      const candidates = all.map(cleanTranscript);
+      const chosen = pickBestMatch(candidates, expected, isLetter);
+      checkResult(chosen || cleaned);
     }
   });
 
@@ -321,12 +219,14 @@ export default function ExamScreen() {
           : [item.word.en];
 
       lastInterimRef.current = '';
+      const settings = getSettings();
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
         continuous: false,
         maxAlternatives: 5,
         contextualStrings: ctx,
+        requiresOnDeviceRecognition: settings.offlineRecognition,
         androidIntentOptions: {
           EXTRA_LANGUAGE_MODEL: 'web_search',
           EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
@@ -459,21 +359,21 @@ export default function ExamScreen() {
   const victoryConfig = (() => {
     if (examLevel === 'beginner') {
       return {
-        title: "TABRIKLAYMIZ!",
-        subtitle: "Beginner darajasi tugadi — A1 boshlanmoqda",
+        title: t('congratulations'),
+        subtitle: t('beginnerDone'),
         badge: 'A1',
       };
     }
     if (examLevel === 'a1') {
       return {
-        title: 'TABRIKLAYMIZ!',
-        subtitle: 'A1 darajasi tugadi — A2 boshlanmoqda',
+        title: t('congratulations'),
+        subtitle: t('a1Done'),
         badge: 'A2',
       };
     }
     return {
-      title: 'AJOYIB!',
-      subtitle: 'Siz A2 darajasini ham tugatdingiz',
+      title: t('amazing'),
+      subtitle: t('a2Done'),
       badge: null as string | null,
     };
   })();
@@ -494,7 +394,7 @@ export default function ExamScreen() {
         </TouchableOpacity>
         <View style={s.headerCenter}>
           <Text style={s.headerTitle}>
-            📝 {examLevel === 'beginner' ? 'IMTIHON' : `${examLevel.toUpperCase()} IMTIHON`}
+            📝 {examLevel === 'beginner' ? t('examTitle') : `${examLevel.toUpperCase()} ${t('examTitle')}`}
           </Text>
           <Text style={s.headerSub}>
             {items.length ? `${currentIndex + 1} / ${items.length}` : '…'}
@@ -527,7 +427,7 @@ export default function ExamScreen() {
                 <Text style={s.wordUz} adjustsFontSizeToFit numberOfLines={2}>
                   🇺🇿 {item.word.uz}
                 </Text>
-                <Text style={s.wordHint}>Inglizchasini ayting</Text>
+                <Text style={s.wordHint}>{t('sayEnglish')}</Text>
                 <TouchableOpacity style={s.listenBtn} onPress={speakCurrent} activeOpacity={0.85}>
                   <LinearGradient colors={[palette.gold, palette.sunDeep]} style={[StyleSheet.absoluteFill,{borderRadius:30}]}/>
                   <Text style={{ fontSize: 28 }}>🔊</Text>
@@ -542,12 +442,12 @@ export default function ExamScreen() {
             {feedback === 'success' ? (
               <>
                 <LinearGradient colors={[palette.mint, palette.mintDeep]} style={[StyleSheet.absoluteFill,{borderRadius:radius.lg}]}/>
-                <Text style={s.successText}>To&apos;g&apos;ri! ⭐</Text>
+                <Text style={s.successText}>{t('correct')} ⭐</Text>
               </>
             ) : feedback === 'fail' ? (
               <>
                 <LinearGradient colors={[palette.coral, palette.coralDeep]} style={[StyleSheet.absoluteFill,{borderRadius:radius.lg}]}/>
-                <Text style={s.failText}>Noto&apos;g&apos;ri! 🔄</Text>
+                <Text style={s.failText}>{t('tryAgain')} 🔄</Text>
               </>
             ) : (
               <Text style={s.placeholderText}> </Text>
@@ -576,10 +476,10 @@ export default function ExamScreen() {
             </TouchableOpacity>
             <Text style={s.micText}>
               {isChecking
-                ? 'Tekshirilmoqda…'
+                ? t('checking')
                 : isRecording
-                  ? 'Eshitilmoqda…'
-                  : 'Bosib turib ayting'}
+                  ? t('listening')
+                  : t('holdToSpeak')}
             </Text>
             {recognizedText ? (
               <View style={s.transcriptPill}>

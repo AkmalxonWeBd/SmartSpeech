@@ -6,16 +6,24 @@ import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { API } from '../utils/api';
 import { playSound } from '../utils/soundProvider';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppSettings, loadSettings, saveSettings, getSettings } from '../utils/settingsManager';
 import VictoryOverlay from '../components/VictoryOverlay';
 import { palette, radius, shadowFx, spacing } from '../utils/theme';
+import { normalize, similarity, cleanTranscript, shuffle } from '../utils/textUtils';
+import { pickBestMatch } from '../utils/letterPhonetics';
+import { t } from '../utils/translations';
 
 type Word = { en: string; uz: string };
 type Phase = 'learn' | 'match' | 'speak' | 'dictation' | 'recall' | 'victory';
-const PHASE_NAMES: Record<Phase, string> = { learn:'📖 O\'rganish', match:'🧩 Yodlash', speak:'🎙️ Talaffuz', dictation:'✍️ Diktant', recall:'🧠 Xotira', victory:'' };
+const PHASE_NAMES: Record<Phase, string> = {
+  learn: `📖 ${t('learnPhase')}`,
+  match: `🧩 ${t('matchPhase')}`,
+  speak: `🎙️ ${t('speakPhase')}`,
+  dictation: `✍️ ${t('dictPhase')}`,
+  recall: `🧠 ${t('recallPhase')}`,
+  victory: '',
+};
 const PHASE_ORDER: Phase[] = ['learn','match','speak','dictation','recall'];
-
-function shuffle<T>(arr: T[]): T[] { const a = [...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 
 export default function WordLessonScreen() {
   const params = useLocalSearchParams();
@@ -97,20 +105,7 @@ export default function WordLessonScreen() {
 
   const speakWord = (text: string) => Speech.speak(text, { language:'en-US', rate:0.75, pitch:1.1 });
 
-  const normalize = (t:string) => t.toLowerCase().trim().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ');
-  const similarity = (a:string, b:string): number => {
-    const na=normalize(a), nb=normalize(b);
-    if(na===nb) return 1;
-    // For short strings, check inclusion
-    if(na.length<2||nb.length<2) {
-      if(na.includes(nb)||nb.includes(na)) return 0.8;
-      return 0;
-    }
-    const bg = (s:string) => { const m=new Map<string,number>(); for(let i=0;i<s.length-1;i++){const bi=s.substring(i,i+2);m.set(bi,(m.get(bi)||0)+1);} return m; };
-    const b1=bg(na), b2=bg(nb); let mt=0;
-    b1.forEach((c,bi) => { mt += Math.min(c, b2.get(bi)||0); });
-    return (2*mt)/(na.length-1+nb.length-1);
-  };
+
 
   // --- Phase transitions ---
   const startPhase = (p: Phase) => {
@@ -178,19 +173,7 @@ export default function WordLessonScreen() {
   // === SPEAK ===
   const lastInterimRef = useRef<string>('');
 
-  // Pick the alternative that best matches `expected`.
-  const pickBestMatch = (candidates: string[], expected: string): string => {
-    if (candidates.length === 0) return '';
-    const ne = normalize(expected);
-    let best = candidates[0];
-    let bestScore = -1;
-    for (const c of candidates) {
-      const nc = normalize(c);
-      const score = nc.includes(ne) || ne.includes(nc) ? 1 : similarity(c, expected);
-      if (score > bestScore) { bestScore = score; best = c; }
-    }
-    return best;
-  };
+
 
   useSpeechRecognitionEvent('result', (ev) => {
     const allTranscripts = ev.results
@@ -206,8 +189,8 @@ export default function WordLessonScreen() {
       if (p === 'speak') {
         const w = wordsRef.current[idxRef.current];
         if (w) {
-          const chosen = pickBestMatch(allTranscripts, w.en);
-          checkSpeak(chosen || t, w.en);
+          const chosen = pickBestMatch(allTranscripts, w.en, false);
+          checkSpeak(chosen || allTranscripts[0] || '', w.en);
         }
       } else if (p === 'recall') {
         const w = recallQueueRef.current[idxRef.current];
@@ -215,8 +198,8 @@ export default function WordLessonScreen() {
         const stripFiller = (s: string) => s.replace(/\benglish\b/gi, '').replace(/\s+/g, ' ').trim();
         if (w) {
           const cleanedAlts = allTranscripts.map(stripFiller).filter(Boolean);
-          const chosen = pickBestMatch(cleanedAlts, w.en);
-          checkRecall(chosen || stripFiller(t) || t, w.en);
+          const chosen = pickBestMatch(cleanedAlts, w.en, false);
+          checkRecall(chosen || cleanedAlts[0] || allTranscripts[0] || '', w.en);
         }
       }
     }
@@ -264,12 +247,14 @@ export default function WordLessonScreen() {
     Animated.spring(micScale, {toValue:1.4, useNativeDriver:true}).start();
     // Provide ALL lesson words as context to bias the engine
     const allContext = wordsRef.current.map(w => w.en);
+    const settings = getSettings();
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
       interimResults: true,
       continuous: false,
       maxAlternatives: 5,
       contextualStrings: [contextWord, ...allContext],
+      requiresOnDeviceRecognition: settings.offlineRecognition,
       // Critical for short-word recognition on Android
       // (see https://issuetracker.google.com/issues/280288200#comment28)
       androidIntentOptions: {
@@ -412,7 +397,7 @@ export default function WordLessonScreen() {
   };
 
   // === RENDER ===
-  if (loading) return <View style={[st.ctr,{justifyContent:'center'}]}><Text style={st.loadTxt}>Yuklanmoqda...</Text></View>;
+  if (loading) return <View style={[st.ctr,{justifyContent:'center'}]}><Text style={st.loadTxt}>{t('loading')}</Text></View>;
 
   const progress = phase==='victory' ? 100 : (PHASE_ORDER.indexOf(phase)/PHASE_ORDER.length)*100 + ((idx/(phase==='match'?matchQueue.length:phase==='recall'?recallQueue.length:words.length))/PHASE_ORDER.length)*100;
 
@@ -420,7 +405,7 @@ export default function WordLessonScreen() {
 
   const renderFeedback = () => (
     <Animated.View style={[st.fbBox, {opacity:feedbackOp}]}>
-      {feedback==='success' ? <Text style={st.fbOk}>To'g'ri! ⭐</Text> : feedback==='fail' ? <Text style={st.fbFail}>Qayta urinib ko'ring</Text> : null}
+      {feedback==='success' ? <Text style={st.fbOk}>{t('correct')} ⭐</Text> : feedback==='fail' ? <Text style={st.fbFail}>{t('tryAgain')}</Text> : null}
     </Animated.View>
   );
 
@@ -431,7 +416,7 @@ export default function WordLessonScreen() {
           <Text style={{fontSize:40}}>🎙️</Text>
         </Animated.View>
       </TouchableOpacity>
-      <Text style={st.micTxt}>{isChecking?"Tekshirilmoqda...":isRecording?"Eshitilmoqda...":"Bosib turib ayting"}</Text>
+      <Text style={st.micTxt}>{isChecking?t('checking'):isRecording?t('listening'):t('holdToSpeak')}</Text>
       {recognizedText?<Text style={st.recTxt}>"{recognizedText}"</Text>:null}
     </View>
   );
@@ -442,8 +427,8 @@ export default function WordLessonScreen() {
         <LinearGradient colors={['#0A0A2E','#1A1A4E','#2D1B69']} style={StyleSheet.absoluteFill}/>
         <VictoryOverlay
           visible
-          title="AJOYIB!"
-          subtitle={`${level.toUpperCase()} • Dars ${lessonNum} tugatildi`}
+          title={t('amazing')}
+          subtitle={`${level.toUpperCase()} • ${t('lesson')} ${lessonNum} ${t('completed')}`}
           icon="🏆"
         />
       </View>
@@ -490,7 +475,7 @@ export default function WordLessonScreen() {
                 <Text style={{fontSize:28}}>🔊</Text>
               </TouchableOpacity>
               <TouchableOpacity style={st.nextBtn} onPress={learnNext}>
-                <Text style={st.nextTxt}>Keyingi →</Text>
+                <Text style={st.nextTxt}>{t('nextWord')} →</Text>
               </TouchableOpacity>
             </View>
             <Text style={st.counter}>{idx+1} / {words.length}</Text>
@@ -501,7 +486,7 @@ export default function WordLessonScreen() {
         {phase==='match' && currentWord && (
           <View style={st.matchCard}>
             <Text style={st.matchQ}>🇺🇿 {currentWord.uz}</Text>
-            <Text style={st.matchHint}>To'g'ri inglizcha so'zni tanlang</Text>
+            <Text style={st.matchHint}>{t('chooseCorrect')}</Text>
             <View style={st.optGrid}>
               {matchOptions.map((opt,i)=>(
                 <TouchableOpacity key={i} style={st.optBtn} onPress={()=>handleMatchSelect(opt)} activeOpacity={0.7}>
@@ -520,7 +505,7 @@ export default function WordLessonScreen() {
             <Text style={st.speakEn}>{currentWord.en}</Text>
             <Text style={st.speakUz}>{currentWord.uz}</Text>
             <TouchableOpacity style={st.listenBtn} onPress={()=>speakWord(currentWord.en)}>
-              <Text style={{fontSize:32}}>🔊</Text><Text style={st.listenTxt}>Eshitish</Text>
+              <Text style={{fontSize:32}}>🔊</Text>
             </TouchableOpacity>
             {renderMic(currentWord.en)}
             <Text style={st.counter}>{idx+1} / {words.length}</Text>
@@ -532,14 +517,14 @@ export default function WordLessonScreen() {
           <View style={st.dictCard}>
             <TouchableOpacity style={st.bigListen} onPress={()=>speakWord(currentWord.en)}>
               <Text style={{fontSize:50}}>🔊</Text>
-              <Text style={st.listenTxt}>Eshitib yozing</Text>
+              <Text style={st.listenTxt}>{t('listenAndWrite')}</Text>
             </TouchableOpacity>
             {showHint && <Text style={st.hint}>💡 Boshlanishi: {currentWord.en.slice(0,2)}...</Text>}
             <TextInput style={st.input} value={dictInput} onChangeText={setDictInput}
-              placeholder="So'zni yozing..." placeholderTextColor="rgba(255,255,255,0.3)"
+              placeholder={t('writeWord')} placeholderTextColor="rgba(255,255,255,0.3)"
               autoCapitalize="none" autoCorrect={false} onSubmitEditing={checkDict}/>
             <TouchableOpacity style={st.checkBtn} onPress={checkDict}>
-              <Text style={st.checkTxt}>Tekshirish ✓</Text>
+              <Text style={st.checkTxt}>{t('checkBtn')} ✓</Text>
             </TouchableOpacity>
             <Text style={st.counter}>{idx+1} / {words.length}</Text>
           </View>
@@ -553,13 +538,13 @@ export default function WordLessonScreen() {
             <Text style={st.recallUz}>{currentWord.uz}</Text>
             {revealAnswer ? (
               <View style={st.revealBox}>
-                <Text style={st.revealLabel}>To'g'ri javob:</Text>
+                <Text style={st.revealLabel}>{t('correctAnswer')}</Text>
                 <Text style={st.revealWord}>{revealAnswer}</Text>
-                <Text style={st.revealHint}>Esda saqlang — keyinroq yana keladi</Text>
+                <Text style={st.revealHint}>{t('rememberIt')}</Text>
               </View>
             ) : (
               <>
-                <Text style={st.recallHint}>Inglizchada ayting{(recallFails[normalize(currentWord.en)]||0) > 0 ? `  •  ${Math.max(0, 3 - (recallFails[normalize(currentWord.en)]||0))} urinish qoldi` : ''}</Text>
+                <Text style={st.recallHint}>{t('sayInEnglish')}{(recallFails[normalize(currentWord.en)]||0) > 0 ? `  •  ${Math.max(0, 3 - (recallFails[normalize(currentWord.en)]||0))} ${t('attemptsLeft')}` : ''}</Text>
                 {renderMic(currentWord.en)}
               </>
             )}
