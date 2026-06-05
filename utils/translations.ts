@@ -112,6 +112,12 @@ export type TranslationKeys = {
   sayEnglish: string;
   congratulations: string;
   beginnerDone: string;
+
+  // App Disabled (server status)
+  appDisabledTitle: string;
+  appDisabledMessage: string;
+  appDisabledHint: string;
+  appDisabledBadge: string;
   a1Done: string;
   a2Done: string;
 };
@@ -222,6 +228,11 @@ const translations: Record<string, TranslationKeys> = {
     beginnerDone: 'Beginner darajasi tugadi — A1 boshlanmoqda',
     a1Done: 'A1 darajasi tugadi — A2 boshlanmoqda',
     a2Done: 'Siz A2 darajasini ham tugatdingiz',
+
+    appDisabledTitle: 'Ilova vaqtincha to\'xtatilgan',
+    appDisabledMessage: 'Ilova hozirda texnik xizmat ko\'rsatish uchun to\'xtatilgan. Iltimos, keyinroq qayta urinib ko\'ring.',
+    appDisabledHint: 'Muammo tez orada hal qilinadi',
+    appDisabledBadge: 'Texnik xizmat',
   },
 
   en: {
@@ -329,6 +340,11 @@ const translations: Record<string, TranslationKeys> = {
     beginnerDone: 'Beginner level done \u2014 A1 starts now',
     a1Done: 'A1 level done \u2014 A2 starts now',
     a2Done: "You've completed A2 as well",
+
+    appDisabledTitle: 'App Temporarily Disabled',
+    appDisabledMessage: 'The app is currently under maintenance. Please try again later.',
+    appDisabledHint: 'The issue will be resolved soon',
+    appDisabledBadge: 'Maintenance',
   },
 
   ru: {
@@ -436,6 +452,11 @@ const translations: Record<string, TranslationKeys> = {
     beginnerDone: 'Начальный уровень пройден — начинается A1',
     a1Done: 'A1 пройден — начинается A2',
     a2Done: 'Вы прошли и уровень A2',
+
+    appDisabledTitle: 'Приложение временно отключено',
+    appDisabledMessage: 'Приложение находится на техническом обслуживании. Пожалуйста, попробуйте позже.',
+    appDisabledHint: 'Проблема будет решена в ближайшее время',
+    appDisabledBadge: 'Тех. обслуживание',
   },
 };
 

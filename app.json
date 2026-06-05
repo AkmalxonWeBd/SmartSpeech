@@ -15,11 +15,11 @@
         "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
       },
-      "bundleIdentifier": "com.darklogicax.smartspeech"
+      "bundleIdentifier": "com.zulfizar.smartspeech"
     },
 
     "android": {
-      "package": "com.darklogicax.smartspeech",
+      "package": "com.zulfizar.smartspeech",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -28,12 +28,14 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "versionCode": 40,
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.MANAGE_EXTERNAL_STORAGE"
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
       ]
     },
 
@@ -57,10 +59,6 @@
         }
       ],
       "expo-video",
-      "expo-secure-store",
-      "expo-sqlite",
-      "expo-localization",
-      "expo-mail-composer",
       "expo-asset",
       [
         "expo-build-properties",

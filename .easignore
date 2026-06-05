@@ -1,0 +1,46 @@
+# EAS Build uchun kerak bo'lmagan fayllar
+# Bu fayl loyiha hajmini kamaytiradi (291MB → ~10-15MB)
+
+# Git tarixi — build uchun kerak emas
+.git/
+
+# Katta media fayllar — serverdan yuklab olinadi (runtime)
+assets/videos/
+assets/soundtracks/*.mp4
+
+# Web build natijalari
+dist/
+web-build/
+
+# Lokal server fayllari — bu serverda ishlaydi, APK ichida emas
+server/
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Expo cache
+.expo/
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+
+# Sertifikatlar
+*.pem
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Typescript build info
+*.tsbuildinfo
+
+# README va qo'llanmalar
+README.md
+INSTRUCTIONS.md

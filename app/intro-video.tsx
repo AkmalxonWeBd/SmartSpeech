@@ -5,32 +5,24 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { getLocalVideoUri } from '../utils/videoDownloader';
 import SmartSpeechWatermark from '../components/SmartSpeechWatermark';
 
-const VIDEO_FILE = 'harflar.mp4';
-
 export default function IntroVideoScreen() {
   const { nextRoute, canSkip } = useLocalSearchParams();
   const [errored, setErrored] = useState(false);
-
   const [videoSource, setVideoSource] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  // Video URI ni asinxron olish
   useEffect(() => {
-    getLocalVideoUri('harflar').then((uri) => {
+    (async () => {
+      const uri = await getLocalVideoUri('harflar');
       setVideoSource(uri);
-      if (uri) {
-        player.replace({ uri });
-        player.play();
-      }
-    });
+      setLoading(false);
+    })();
   }, []);
 
   const player = useVideoPlayer(videoSource, (p) => {
     p.loop = false;
     p.muted = false;
-    try {
-      p.play();
-    } catch (e) {
-      console.warn('[IntroVideo] play() threw', e);
-    }
   });
 
   const handleFinish = () => {
@@ -39,12 +31,17 @@ export default function IntroVideoScreen() {
   };
 
   useEffect(() => {
+    if (!videoSource) return;
     const endSub = player.addListener('playToEnd', handleFinish);
     const statusSub = player.addListener(
       'statusChange',
       ({ status, error }: { status: VideoPlayerStatus; error?: unknown }) => {
         console.log('[IntroVideo] status:', status, error ?? '');
-        if (status === 'error') setErrored(true);
+        if (status === 'readyToPlay') {
+          try { player.play(); } catch (e) { console.warn('[IntroVideo] play threw', e); }
+        } else if (status === 'error') {
+          setErrored(true);
+        }
       },
     );
     return () => {
@@ -52,23 +49,23 @@ export default function IntroVideoScreen() {
       statusSub.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player]);
+  }, [player, videoSource]);
 
-  if (errored) {
+  if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.loadingText}>Video yuklashda xatolik</Text>
-        <TouchableOpacity style={styles.skipButton} onPress={handleFinish}>
-          <Text style={styles.skipText}>Davom etish ▶</Text>
-        </TouchableOpacity>
+        <Text style={styles.loadingText}>Yuklanmoqda...</Text>
       </View>
     );
   }
 
-  if (videoSource == null) {
+  if (errored || videoSource == null) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.loadingText}>Video yuklanmoqda...</Text>
+        <Text style={styles.loadingText}>Video topilmadi</Text>
+        <TouchableOpacity style={styles.skipButton} onPress={handleFinish}>
+          <Text style={styles.skipText}>Davom etish ▶</Text>
+        </TouchableOpacity>
       </View>
     );
   }

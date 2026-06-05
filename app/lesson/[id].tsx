@@ -1,44 +1,44 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as Speech from 'expo-speech';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    ExpoSpeechRecognitionModule,
-    useSpeechRecognitionEvent,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  Easing,
+  Alert,
+  Platform,
+  useWindowDimensions,
+} from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Speech from 'expo-speech';
+import * as Haptics from 'expo-haptics';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-    Alert,
-    Animated,
-    Easing,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
-} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSettings } from '../../utils/settingsManager';
-import { getLocalVideoUri } from '../../utils/videoDownloader';
+import { getLocalVideoSource } from '../../utils/videoDownloader';
 
+import { getLessonMeta } from '../../utils/alphabetData';
+import { getWordForLetter, BeginnerWord } from '../../utils/beginnerWords';
+import { normalize, similarity, cleanTranscript } from '../../utils/textUtils';
+import {
+  LETTER_PHONETICS,
+  matchesLetter,
+  pickBestMatch,
+} from '../../utils/letterPhonetics';
+import { API } from '../../utils/api';
+import { playSound } from '../../utils/soundProvider';
+import { t } from '../../utils/translations';
+import VictoryOverlay from '../../components/VictoryOverlay';
 import BrandingIntro from '../../components/BrandingIntro';
 import SmartSpeechWatermark from '../../components/SmartSpeechWatermark';
 import StickerBurst from '../../components/StickerBurst';
-import VictoryOverlay from '../../components/VictoryOverlay';
-import { getLessonMeta } from '../../utils/alphabetData';
-import { API } from '../../utils/api';
-import { BeginnerWord, getWordForLetter } from '../../utils/beginnerWords';
-import {
-    LETTER_PHONETICS,
-    matchesLetter,
-    pickBestMatch,
-} from '../../utils/letterPhonetics';
-import { playSound } from '../../utils/soundProvider';
-import { cleanTranscript, normalize, similarity } from '../../utils/textUtils';
 import { palette, radius, shadowFx, spacing } from '../../utils/theme';
-import { t } from '../../utils/translations';
 
 // ─── Word emoji mapping ──────────────────────────────────────────
 const WORD_EMOJIS: Record<string, string> = {
@@ -88,12 +88,11 @@ function IntroLesson({ lessonId }: { lessonId: number }) {
   const [showBranding, setShowBranding] = useState(true);
   const playerReadyRef = useRef(false);
 
-  let videoSource: number | null = null;
-  try {
-    videoSource = require('../../assets/videos/harflar.mp4');
-  } catch {
-    videoSource = null;
-  }
+  // Video manbasini sync ravishda olamiz (LetterLesson bilan bir xil pattern).
+  // Avval useState/useEffect bilan async tarzda olinardi, lekin bu paytda
+  // useVideoPlayer dastlab `null` manba bilan yaratilib, keyin manba o'zgarganda
+  // expo-video v3 player ni qayta yaratib o'sha lessonni ko'rsatmaydi.
+  const videoSource = getLocalVideoSource('harflar');
 
   const player = useVideoPlayer(videoSource, (p) => {
     p.loop = false;
@@ -239,22 +238,23 @@ function LetterLesson({
   const starRotate = useRef(new Animated.Value(0)).current;
 
   // ── Video source for current letter ────────────────────────
+  // Videolar serverdan yuklab olinib lokal FileSystem da saqlanadi.
+  // getLocalVideoSource() lokal fayl URI sini qaytaradi (string | null).
   const currentLetter = steps[letterIdx]?.letter?.toLowerCase() ?? '';
-  const [videoSource, setVideoSource] = useState<string | null>(null);
+  const videoSource = currentLetter ? getLocalVideoSource(currentLetter) : null;
+  const seekDoneRef = useRef(false);
+  const showBrandingRef = useRef(true);
+  useEffect(() => { showBrandingRef.current = showBranding; }, [showBranding]);
 
+  // Reset seek flag whenever we switch to a new letter / new bundled source.
   useEffect(() => {
-    if (currentLetter) {
-      getLocalVideoUri(currentLetter).then((uri) => {
-        setVideoSource(uri);
-      });
-    }
+    seekDoneRef.current = false;
   }, [currentLetter]);
 
-  const player = useVideoPlayer(videoSource ? { uri: videoSource } : null, (p) => {
+  // `useVideoPlayer` accepts a string URI from local filesystem.
+  const player = useVideoPlayer(videoSource, (p) => {
     p.loop = false;
     p.muted = false;
-    // Videoni 6-soniyadan boshlash (intro qismini o'tkazib yuborish)
-    p.currentTime = 6;
   });
 
   // ── Sync refs ─────────────────────────────────────────────
@@ -307,26 +307,22 @@ function LetterLesson({
   };
 
   // ── Branding done → start video or skip to pronunciation ──
-  const handleBrandingDone = async () => {
+  const handleBrandingDone = () => {
     setShowBranding(false);
-    
-    let source = videoSource;
-    if (!source) {
-      source = await getLocalVideoUri(currentLetter);
+
+    if (videoSource == null) {
+      skipToPronounce();
+      return;
     }
 
-    if (source) {
-      try {
-        player.replace({ uri: source });
-        player.currentTime = 6;
-        player.play();
-      } catch (e) {
-        console.warn('[Lesson] Play failed:', e);
-        setVideoErrored(true);
-        skipToPronounce();
-      }
-    } else {
-      skipToPronounce();
+    // Try to play immediately. If the source isn't ready yet the seek
+    // will be performed by the `readyToPlay` listener below; we still
+    // call play() optimistically because expo-video queues playback
+    // until the source is available on most platforms.
+    try {
+      player.play();
+    } catch (e) {
+      console.warn('[Lesson] Play failed:', e);
     }
   };
 
@@ -374,7 +370,21 @@ function LetterLesson({
       }
     });
     const errSub = player.addListener('statusChange', ({ status }: { status: string }) => {
-      if (status === 'error' && phaseRef.current === 'video') {
+      if (status === 'readyToPlay' && phaseRef.current === 'video') {
+        // Source has loaded — seek past the 6s intro (once per source) and
+        // start playback if the branding overlay is already gone.
+        try {
+          if (!seekDoneRef.current) {
+            player.currentTime = 6;
+            seekDoneRef.current = true;
+          }
+          if (!showBrandingRef.current) {
+            player.play();
+          }
+        } catch (e) {
+          console.warn('[Lesson] readyToPlay seek/play failed:', e);
+        }
+      } else if (status === 'error' && phaseRef.current === 'video') {
         setVideoErrored(true);
         // Auto-skip to pronunciation
         setTimeout(() => {
@@ -627,7 +637,7 @@ function LetterLesson({
       {/* ── VIDEO PHASE ─────────────────────────────────── */}
       {phase === 'video' && (
         <View style={[s.phaseContainer, { backgroundColor: '#000' }]}>
-          {videoSource && !videoErrored ? (
+          {videoSource != null && !videoErrored ? (
             <>
               <VideoView
                 style={{ flex: 1, width: '100%' }}
@@ -798,6 +808,20 @@ function LetterLesson({
                 )}
               </Animated.View>
               {renderMic()}
+              {/* Web uchun — mikrofon ishlamasa, bosib o'tish mumkin */}
+              {Platform.OS === 'web' && (
+                <TouchableOpacity
+                  style={[s.skipBtn, { marginTop: 16 }]}
+                  onPress={() => {
+                    showFeedback('success');
+                    playSound('magic');
+                    setTimeout(() => goToPhase('letterDone'), 1400);
+                  }}
+                >
+                  <LinearGradient colors={[palette.mint, palette.mintDeep]} style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} />
+                  <Text style={s.skipTxt}>✅ {t('correct')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

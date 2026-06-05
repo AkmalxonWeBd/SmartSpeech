@@ -1,0 +1,72 @@
+1
+00:00:01,000 --> 00:00:04,500
+Apples and bananas
+
+2
+00:00:05,000 --> 00:00:08,000
+I like to eat, eat, eat
+
+3
+00:00:08,500 --> 00:00:12,000
+Apples and bananas
+
+4
+00:00:13,000 --> 00:00:16,000
+I like to eat, eat, eat
+
+5
+00:00:16,500 --> 00:00:20,000
+Apples and bananas
+
+6
+00:00:21,000 --> 00:00:24,500
+I like to ate, ate, ate
+
+7
+00:00:25,000 --> 00:00:28,500
+Ay-ples and ba-nay-nays
+
+8
+00:00:29,000 --> 00:00:32,500
+I like to ate, ate, ate
+
+9
+00:00:33,000 --> 00:00:36,500
+Ay-ples and ba-nay-nays
+
+10
+00:00:37,000 --> 00:00:40,500
+I like to eat, eat, eat
+
+11
+00:00:41,000 --> 00:00:44,500
+Ee-ples and bee-nee-nees
+
+12
+00:00:45,000 --> 00:00:48,500
+I like to ite, ite, ite
+
+13
+00:00:49,000 --> 00:00:52,500
+I-ples and bi-ni-nis
+
+14
+00:00:53,000 --> 00:00:56,500
+I like to ote, ote, ote
+
+15
+00:00:57,000 --> 00:01:00,500
+Oh-ples and bo-no-nos
+
+16
+00:01:01,000 --> 00:01:04,500
+I like to ute, ute, ute
+
+17
+00:01:05,000 --> 00:01:08,500
+Oo-ples and boo-noo-noos
+
+18
+00:01:09,000 --> 00:01:14,000
+I like to eat, eat, eat
+Apples and bananas!

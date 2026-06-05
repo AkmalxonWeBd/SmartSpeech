@@ -1,24 +1,26 @@
-import Slider from '@react-native-community/slider';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Easing,
+  TouchableOpacity,
+  Switch,
+  ScrollView,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
-import { resumeBackgroundMusic, setBackgroundMusicVolume, stopBackgroundMusic } from '../utils/backgroundMusic';
-import { AppSettings, getSettings, loadSettings, saveSettings } from '../utils/settingsManager';
+import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { playSound } from '../utils/soundProvider';
-import { palette } from '../utils/theme';
+import { AppSettings, loadSettings, saveSettings, getSettings } from '../utils/settingsManager';
+import * as Haptics from 'expo-haptics';
 import { t } from '../utils/translations';
+import { palette, radius, shadowFx } from '../utils/theme';
+import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import Slider from '@react-native-community/slider';
+import { setBackgroundMusicVolume, stopBackgroundMusic, resumeBackgroundMusic } from '../utils/backgroundMusic';
 
 type LanguageOption = { id: 'uz' | 'en' | 'ru'; name: string; flag: string; nativeName: string };
 
@@ -227,6 +229,16 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadSettings().then((s) => setSettings(s));
+
+    // Always run the entrance animation. Previously this was only reached on
+    // non-Android platforms because the Android branch returned early — that
+    // left `fadeIn` at 0, so the settings list was invisible on the APK
+    // while it rendered fine on web.
+    Animated.parallel([
+      Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.spring(slideUp, { toValue: 0, friction: 7, tension: 50, useNativeDriver: true }),
+    ]).start();
+
     if (Platform.OS === 'android') {
       checkModelStatus();
       // Poll while downloading
@@ -235,11 +247,6 @@ export default function SettingsScreen() {
       }, 3000);
       return () => clearInterval(interval);
     }
-
-    Animated.parallel([
-      Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }),
-      Animated.spring(slideUp, { toValue: 0, friction: 7, tension: 50, useNativeDriver: true }),
-    ]).start();
   }, []);
 
   const updateSetting = async (key: keyof AppSettings, value: any) => {
@@ -428,7 +435,7 @@ export default function SettingsScreen() {
           {/* App info */}
           <View style={styles.appInfo}>
             <Text style={styles.appName}>SmartSpeech 🦉</Text>
-            <Text style={styles.appVersion}>v2.0.0 • Made with DarkLogicAX and ZULFIZAR UMAROVA</Text>
+            <Text style={styles.appVersion}>v3.0.0 • Made with ZULFIZAR UMAROVA</Text>
           </View>
         </ScrollView>
       </Animated.View>

@@ -1,216 +1,238 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+/**
+ * Video Downloader — serverdan videolarni yuklab oladi va lokal saqlaydi.
+ *
+ * Birinchi ochilishda videolar serverdan birma-bir yuklab olinadi va
+ * FileSystem ga saqlanadi. Keyin ilova to'liq offline ishlaydi.
+ *
+ * Videolar saqlash joyi: FileSystem.documentDirectory + 'videos/'
+ */
+
+// IMPORTANT: expo-file-system v19+ da `documentDirectory`, `getInfoAsync`,
+// `createDownloadResumable` va boshqa eski API'lar `expo-file-system/legacy`
+// submodulega ko'chirilgan. Asosiy moduldan import qilsa, ular runtime'da
+// throw qiladi va yuklab olish ishlamay qoladi.
 import * as FileSystem from 'expo-file-system/legacy';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { getServerUrl } from './serverStatus';
 
-// Live Nginx server URL configured for SmartSpeech videos
-export const SERVER_BASE_URL = 'https://smartspeech.109.205.180.84.nip.io/videos';
+// Web'da expo-file-system mavjud emas (brauzerda fayl tizimi yo'q). Web
+// platformasida video yuklab olishni butunlay o'tkazib yuboramiz, shunda
+// splash ekrani to'xtab qolmaydi.
+const IS_WEB = Platform.OS === 'web';
 
-// Total alphabet videos
 export const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'.split('');
-// Add the intro video as well
 export const ALL_VIDEOS = [...ALPHABET, 'harflar'];
 
-// ── Storage paths ──────────────────────────────────────────────
-const EXTERNAL_DIR = 'file:///storage/emulated/0/SmartSpeech/';
-const INTERNAL_DIR = `${FileSystem.documentDirectory}videos/`;
+// Lokal papkalar
+const VIDEOS_DIR = `${FileSystem.documentDirectory}videos/`;
+const ALPHABET_DIR = `${VIDEOS_DIR}alphabet/`;
+const DOWNLOAD_MARKER = `${VIDEOS_DIR}.downloaded`;
 
 /**
- * Request storage permission for writing to external storage.
- * On Android 11+ (API 30+) requires MANAGE_EXTERNAL_STORAGE.
+ * Videolar papkalarini yaratadi (agar mavjud bo'lmasa).
  */
-export async function requestStoragePermission(): Promise<boolean> {
-  if (Platform.OS !== 'android') return true;
-
-  try {
-    if (Platform.Version >= 30) {
-      const hasPermission = await PermissionsAndroid.check(
-        'android.permission.MANAGE_EXTERNAL_STORAGE' as PermissionsAndroid.Permission,
-      );
-      if (hasPermission) return true;
-
-      const granted = await PermissionsAndroid.request(
-        'android.permission.MANAGE_EXTERNAL_STORAGE' as PermissionsAndroid.Permission,
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    }
-
-    // Android 10 and below
-    const results = await PermissionsAndroid.requestMultiple([
-      'android.permission.WRITE_EXTERNAL_STORAGE' as PermissionsAndroid.Permission,
-      'android.permission.READ_EXTERNAL_STORAGE' as PermissionsAndroid.Permission,
-    ]);
-    return (
-      results['android.permission.WRITE_EXTERNAL_STORAGE'] ===
-      PermissionsAndroid.RESULTS.GRANTED
-    );
-  } catch (e) {
-    console.warn('Storage permission error:', e);
-    return false;
+export async function initVideoDirectory(): Promise<void> {
+  if (IS_WEB) return;
+  const videosInfo = await FileSystem.getInfoAsync(VIDEOS_DIR);
+  if (!videosInfo.exists) {
+    await FileSystem.makeDirectoryAsync(VIDEOS_DIR, { intermediates: true });
+  }
+  const alphaInfo = await FileSystem.getInfoAsync(ALPHABET_DIR);
+  if (!alphaInfo.exists) {
+    await FileSystem.makeDirectoryAsync(ALPHABET_DIR, { intermediates: true });
   }
 }
 
 /**
- * Check if we can use external storage.
+ * Video faylning lokal yo'lini qaytaradi.
  */
-async function canUseExternalStorage(): Promise<boolean> {
-  if (Platform.OS !== 'android') return false;
-  try {
-    if (Platform.Version >= 30) {
-      return await PermissionsAndroid.check(
-        'android.permission.MANAGE_EXTERNAL_STORAGE' as PermissionsAndroid.Permission,
-      );
-    }
-    return await PermissionsAndroid.check(
-      'android.permission.WRITE_EXTERNAL_STORAGE' as PermissionsAndroid.Permission,
-    );
-  } catch {
-    return false;
+function getLocalPath(videoName: string): string {
+  if (videoName === 'harflar') {
+    return `${VIDEOS_DIR}harflar.mp4`;
   }
+  return `${ALPHABET_DIR}${videoName}.mp4`;
 }
 
 /**
- * Get the active videos directory based on permissions.
+ * Video fayl nomini server URL ga aylantiradi.
  */
-async function getVideosDir(): Promise<string> {
-  const external = await canUseExternalStorage();
-  return external ? EXTERNAL_DIR : INTERNAL_DIR;
-}
-
-/**
- * Initializes the video directory in local storage.
- */
-export async function initVideoDirectory() {
-  const dir = await getVideosDir();
-  try {
-    const dirInfo = await FileSystem.getInfoAsync(dir);
-    if (!dirInfo.exists) {
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-    }
-  } catch (e) {
-    // If external fails, fall back to internal
-    if (dir === EXTERNAL_DIR) {
-      console.warn('External dir failed, falling back to internal:', e);
-      const intInfo = await FileSystem.getInfoAsync(INTERNAL_DIR);
-      if (!intInfo.exists) {
-        await FileSystem.makeDirectoryAsync(INTERNAL_DIR, { intermediates: true });
-      }
-    }
+function getVideoUrl(videoName: string): string {
+  const base = getServerUrl();
+  if (videoName === 'harflar') {
+    return `${base}/media/videos/harflar.mp4`;
   }
+  return `${base}/media/videos/alphabet/${videoName}.mp4`;
 }
 
 /**
- * Returns the local file URI for a video if it exists.
- * Checks external directory first, then internal.
- * Returns null if the video has not been downloaded yet.
+ * Bitta video yuklab olinganmi tekshiradi.
+ */
+export async function isVideoDownloaded(videoName: string): Promise<boolean> {
+  if (IS_WEB) return true; // Web'da yuklab olish kerak emas
+  const path = getLocalPath(videoName);
+  const info = await FileSystem.getInfoAsync(path);
+  return info.exists && (info.size ?? 0) > 0;
+}
+
+/**
+ * Barcha videolar yuklab olinganmi tekshiradi.
+ */
+export async function areAllVideosDownloaded(): Promise<boolean> {
+  if (IS_WEB) return true; // Web'da yuklab olish bosqichi yo'q
+  // Marker fayl mavjudligini tekshiramiz (tezroq)
+  const marker = await FileSystem.getInfoAsync(DOWNLOAD_MARKER);
+  if (marker.exists) return true;
+
+  // Marker yo'q — har birini tekshiramiz
+  for (const name of ALL_VIDEOS) {
+    const exists = await isVideoDownloaded(name);
+    if (!exists) return false;
+  }
+  // Hammasi bor — marker yaratamiz
+  await FileSystem.writeAsStringAsync(DOWNLOAD_MARKER, new Date().toISOString());
+  return true;
+}
+
+/**
+ * Lokal video URI ni qaytaradi.
+ * expo-video uchun string URI sifatida.
+ */
+export function getLocalVideoSource(videoName: string): string | null {
+  return getLocalPath(videoName.toLowerCase());
+}
+
+/**
+ * Asinxron versiya — fayl mavjudligini tekshiradi.
+ * Web'da to'g'ridan-to'g'ri server URL'ini qaytaradi (lokal fayl yo'q).
  */
 export async function getLocalVideoUri(videoName: string): Promise<string | null> {
-  const externalUri = `${EXTERNAL_DIR}${videoName}.mp4`;
-  const internalUri = `${INTERNAL_DIR}${videoName}.mp4`;
-
-  // Check external first
-  try {
-    const extInfo = await FileSystem.getInfoAsync(externalUri);
-    if (extInfo.exists) return externalUri;
-  } catch {}
-
-  // Fallback to internal
-  try {
-    const intInfo = await FileSystem.getInfoAsync(internalUri);
-    if (intInfo.exists) return internalUri;
-  } catch {}
-
+  if (IS_WEB) {
+    // Web'da fayl tizimi yo'q — to'g'ridan-to'g'ri serverdan oqim qilamiz.
+    const base = getServerUrl();
+    return videoName.toLowerCase() === 'harflar'
+      ? `${base}/media/videos/harflar.mp4`
+      : `${base}/media/videos/alphabet/${videoName.toLowerCase()}.mp4`;
+  }
+  const path = getLocalPath(videoName.toLowerCase());
+  const info = await FileSystem.getInfoAsync(path);
+  if (info.exists && (info.size ?? 0) > 0) {
+    return path;
+  }
   return null;
 }
 
 /**
- * Checks if all videos are downloaded.
- */
-export async function areAllVideosDownloaded(): Promise<boolean> {
-  try {
-    const isDownloaded = await AsyncStorage.getItem('all_videos_downloaded');
-    if (isDownloaded === 'true') return true;
-
-    // Verify all exist
-    for (const v of ALL_VIDEOS) {
-      const exists = await getLocalVideoUri(v);
-      if (!exists) return false;
-    }
-
-    await AsyncStorage.setItem('all_videos_downloaded', 'true');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Downloads a single video.
+ * Bitta videoni serverdan yuklab oladi.
  */
 export async function downloadVideo(
   videoName: string,
   onProgress?: (progress: number) => void,
 ): Promise<string | null> {
+  if (IS_WEB) {
+    // Web'da fayl yuklab olishning ma'nosi yo'q — server URL'ini qaytaramiz.
+    onProgress?.(1);
+    const base = getServerUrl();
+    return videoName === 'harflar'
+      ? `${base}/media/videos/harflar.mp4`
+      : `${base}/media/videos/alphabet/${videoName}.mp4`;
+  }
+  await initVideoDirectory();
+
+  const localPath = getLocalPath(videoName);
+
+  // Agar allaqachon yuklab olingan bo'lsa
+  const info = await FileSystem.getInfoAsync(localPath);
+  if (info.exists && (info.size ?? 0) > 0) {
+    onProgress?.(1);
+    return localPath;
+  }
+
   try {
-    await initVideoDirectory();
-    const dir = await getVideosDir();
-    const fileUri = `${dir}${videoName}.mp4`;
-    const remoteUrl = `${SERVER_BASE_URL}/${videoName}.mp4`;
+    const url = getVideoUrl(videoName);
 
     const downloadResumable = FileSystem.createDownloadResumable(
-      remoteUrl,
-      fileUri,
+      url,
+      localPath,
       {},
-      (downloadProgress) => {
-        const progress =
-          downloadProgress.totalBytesWritten /
-          downloadProgress.totalBytesExpectedToWrite;
-        if (onProgress) onProgress(progress);
+      (dp) => {
+        const progress = dp.totalBytesWritten / dp.totalBytesExpectedToWrite;
+        onProgress?.(progress);
       },
     );
 
     const result = await downloadResumable.downloadAsync();
-    return result?.uri || null;
-  } catch (error) {
-    console.warn(`Failed to download ${videoName}:`, error);
+    if (result?.uri) {
+      return result.uri;
+    }
+    return null;
+  } catch (e) {
+    console.warn(`[VideoDownloader] ${videoName} yuklab olishda xatolik:`, e);
+    // Yarim yuklangan faylni o'chiramiz
+    try {
+      await FileSystem.deleteAsync(localPath, { idempotent: true });
+    } catch {}
     return null;
   }
 }
 
 /**
- * Downloads all missing videos sequentially.
+ * Yuklanmagan barcha videolarni serverdan birma-bir yuklab oladi.
+ * Splash screen uchun progress callback beradi.
  */
 export async function downloadAllMissingVideos(
   onOverallProgress?: (current: number, total: number) => void,
   onFileProgress?: (progress: number) => void,
 ): Promise<boolean> {
-  // Request permission before downloading
-  await requestStoragePermission();
-  await initVideoDirectory();
-
-  let downloadedCount = 0;
-
-  for (let i = 0; i < ALL_VIDEOS.length; i++) {
-    const video = ALL_VIDEOS[i];
-    const exists = await getLocalVideoUri(video);
-
-    if (exists) {
-      downloadedCount++;
-      if (onOverallProgress) onOverallProgress(downloadedCount, ALL_VIDEOS.length);
-      continue;
-    }
-
-    const success = await downloadVideo(video, onFileProgress);
-    if (success) {
-      downloadedCount++;
-      if (onOverallProgress) onOverallProgress(downloadedCount, ALL_VIDEOS.length);
-    } else {
-      return false; // Stop on first failure to save bandwidth / retry later
-    }
-  }
-
-  if (downloadedCount === ALL_VIDEOS.length) {
-    await AsyncStorage.setItem('all_videos_downloaded', 'true');
+  // Web'da yuklab olish bosqichi yo'q — splashga 100% holatni darhol bildiramiz.
+  if (IS_WEB) {
+    onOverallProgress?.(ALL_VIDEOS.length, ALL_VIDEOS.length);
+    onFileProgress?.(1);
     return true;
   }
-  return false;
+  // Allaqachon yuklab olinganmi?
+  const alreadyDone = await areAllVideosDownloaded();
+  if (alreadyDone) {
+    onOverallProgress?.(ALL_VIDEOS.length, ALL_VIDEOS.length);
+    return true;
+  }
+
+  await initVideoDirectory();
+
+  // Qaysilari yuklanmagan — ularni aniqlaymiz
+  const missing: string[] = [];
+  for (const name of ALL_VIDEOS) {
+    const exists = await isVideoDownloaded(name);
+    if (!exists) missing.push(name);
+  }
+
+  if (missing.length === 0) {
+    onOverallProgress?.(ALL_VIDEOS.length, ALL_VIDEOS.length);
+    await FileSystem.writeAsStringAsync(DOWNLOAD_MARKER, new Date().toISOString());
+    return true;
+  }
+
+  const total = missing.length;
+  let completed = 0;
+  let allOk = true;
+
+  // UI uchun boshlang'ich (0/total) holatni darhol bildirib qo'yamiz, shunda
+  // splash ekranida birinchi fayl yuklab olinayotganda ham to'g'ri "X/Y"
+  // matnini ko'rish mumkin.
+  onOverallProgress?.(0, total);
+
+  for (const name of missing) {
+    const result = await downloadVideo(name, onFileProgress);
+    if (!result) allOk = false;
+    completed++;
+    onOverallProgress?.(completed, total);
+  }
+
+  if (allOk) {
+    await FileSystem.writeAsStringAsync(DOWNLOAD_MARKER, new Date().toISOString());
+  }
+
+  return allOk;
 }
+
+// Legacy export
+export const SERVER_BASE_URL = '';

@@ -1,0 +1,50 @@
+1
+00:00:01,000 --> 00:00:04,500
+How many fingers do you see?
+
+2
+00:00:05,000 --> 00:00:08,000
+One, two, three, four, five!
+
+3
+00:00:09,000 --> 00:00:12,500
+How many fingers do you see?
+
+4
+00:00:13,000 --> 00:00:16,000
+Six, seven, eight, nine, ten!
+
+5
+00:00:17,000 --> 00:00:20,500
+One finger, one finger
+Turn around
+
+6
+00:00:21,000 --> 00:00:24,000
+Two fingers, two fingers
+Turn around
+
+7
+00:00:25,000 --> 00:00:28,500
+Three fingers, three fingers
+Turn around
+
+8
+00:00:29,000 --> 00:00:32,000
+Four fingers, four fingers
+Turn around
+
+9
+00:00:33,000 --> 00:00:36,500
+Five fingers, five fingers
+Turn around
+
+10
+00:00:37,000 --> 00:00:42,000
+How many fingers?
+One, two, three, four, five!
+
+11
+00:00:43,000 --> 00:00:47,000
+How many fingers?
+Six, seven, eight, nine, ten!

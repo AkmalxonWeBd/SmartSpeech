@@ -1,0 +1,54 @@
+1
+00:00:01,000 --> 00:00:04,500
+I have a pet, it's a dog
+Woof woof woof!
+
+2
+00:00:05,000 --> 00:00:08,500
+I have a pet, it's a cat
+Meow meow meow!
+
+3
+00:00:09,000 --> 00:00:12,500
+I have a pet, it's a bird
+Tweet tweet tweet!
+
+4
+00:00:13,000 --> 00:00:16,500
+I have a pet, it's a fish
+Blub blub blub!
+
+5
+00:00:17,000 --> 00:00:21,000
+Dog, cat, bird, fish
+These are my animal friends!
+
+6
+00:00:22,000 --> 00:00:25,500
+Look at the cow
+Moo moo moo!
+
+7
+00:00:26,000 --> 00:00:29,500
+Look at the pig
+Oink oink oink!
+
+8
+00:00:30,000 --> 00:00:33,500
+Look at the duck
+Quack quack quack!
+
+9
+00:00:34,000 --> 00:00:37,500
+Look at the sheep
+Baa baa baa!
+
+10
+00:00:38,000 --> 00:00:42,000
+Cow, pig, duck, sheep
+Animals on the farm!
+
+11
+00:00:43,000 --> 00:00:47,000
+I love animals!
+Animals are my friends!

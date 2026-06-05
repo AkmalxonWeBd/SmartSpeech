@@ -1,0 +1,58 @@
+1
+00:00:01,000 --> 00:00:04,500
+Daddy finger, daddy finger
+Where are you?
+
+2
+00:00:05,000 --> 00:00:08,000
+Here I am, here I am
+How do you do?
+
+3
+00:00:09,000 --> 00:00:12,500
+Mommy finger, mommy finger
+Where are you?
+
+4
+00:00:13,000 --> 00:00:16,000
+Here I am, here I am
+How do you do?
+
+5
+00:00:17,000 --> 00:00:20,500
+Brother finger, brother finger
+Where are you?
+
+6
+00:00:21,000 --> 00:00:24,000
+Here I am, here I am
+How do you do?
+
+7
+00:00:25,000 --> 00:00:28,500
+Sister finger, sister finger
+Where are you?
+
+8
+00:00:29,000 --> 00:00:32,000
+Here I am, here I am
+How do you do?
+
+9
+00:00:33,000 --> 00:00:36,500
+Baby finger, baby finger
+Where are you?
+
+10
+00:00:37,000 --> 00:00:40,000
+Here I am, here I am
+How do you do?
+
+11
+00:00:41,000 --> 00:00:45,000
+Daddy finger, mommy finger
+Brother, sister, baby too!
+
+12
+00:00:45,500 --> 00:00:50,000
+The finger family song!

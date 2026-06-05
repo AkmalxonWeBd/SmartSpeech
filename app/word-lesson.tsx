@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, TextInput, useWindowDimensions, Keyboard } from 'react-native';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, TextInput, useWindowDimensions, Keyboard, Platform, ScrollView } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API } from '../utils/api';
 import { playSound } from '../utils/soundProvider';
 import { AppSettings, loadSettings, saveSettings, getSettings } from '../utils/settingsManager';
@@ -29,7 +30,18 @@ export default function WordLessonScreen() {
   const params = useLocalSearchParams();
   const level = (params.level as string) || 'A1';
   const lessonNum = parseInt(params.lesson as string) || 1;
-  useWindowDimensions();
+  const { width: SW, height: SH } = useWindowDimensions();
+
+  // ── Fluid scale factors ────────────────────────────────────
+  // Reference: 1024×600 landscape. Everything scales proportionally.
+  const ws = SW / 1024;           // width scale
+  const hs = SH / 600;            // height scale
+  const fs = (ws + hs) / 2;       // font scale (balanced)
+  const ms = Math.min(ws, hs);    // minimum scale (for square items)
+  const w = (v: number) => Math.round(v * ws);
+  const h = (v: number) => Math.round(v * hs);
+  const f = (v: number) => Math.round(v * fs);
+  const m = (v: number) => Math.round(v * ms);
 
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
@@ -396,34 +408,117 @@ export default function WordLessonScreen() {
     }, 4200);
   };
 
+  // ── Dynamic styles (scale with screen) ─────────────────────
+  const ds = useMemo(() => {
+    const _ws = SW / 1024;
+    const _hs = SH / 600;
+    const _fs = (_ws + _hs) / 2;
+    const _ms = Math.min(_ws, _hs);
+    const s = (v: number) => Math.round(v * _fs);
+    const sw = (v: number) => Math.round(v * _ws);
+    const sh = (v: number) => Math.round(v * _hs);
+    const sm = (v: number) => Math.round(v * _ms);
+
+    return StyleSheet.create({
+      ctr: { flex: 1 },
+      loadTxt: { color: '#fff', fontSize: s(18), textAlign: 'center', fontWeight: '700' },
+      hdr: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: sw(20), paddingTop: sh(8), gap: sw(8) },
+      backBtn: { width: sm(40), height: sm(40), borderRadius: sm(20), backgroundColor: 'rgba(255,255,255,0.25)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)', alignItems: 'center', justifyContent: 'center', ...shadowFx.soft },
+      backIcon: { color: '#FFF', fontSize: s(22), fontWeight: '900', marginTop: -2 },
+      hdrBlock: { flex: 1, alignItems: 'center' },
+      hdrSpacer: { width: sm(40) },
+      hdrTitle: { fontSize: s(18), fontWeight: '900', color: palette.gold, letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+      hdrSub: { fontSize: s(12), fontWeight: '700', color: 'rgba(255,255,255,0.85)', marginTop: sh(1), letterSpacing: 1 },
+      progWrap: { height: sh(8), backgroundColor: 'rgba(0,0,0,0.18)', marginHorizontal: sw(20), marginTop: sh(6), borderRadius: s(4), overflow: 'hidden' as const, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+      progBar: { height: '100%' as any, borderRadius: s(4), overflow: 'hidden' as const },
+      fbBox: { position: 'absolute' as const, top: '12%' as any, alignSelf: 'center' as const, zIndex: 99, paddingHorizontal: sw(24), paddingVertical: sh(8), borderRadius: s(20), backgroundColor: 'rgba(0,0,0,0.75)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', ...shadowFx.lifted },
+      fbOk: { color: '#2ECC71', fontSize: s(18), fontWeight: 'bold' as const },
+      fbFail: { color: '#E74C3C', fontSize: s(16), fontWeight: 'bold' as const },
+      body: { flex: 1, padding: s(10) },
+      bodyScroll: { flexGrow: 1, justifyContent: 'center' as const, alignItems: 'center' as const, paddingVertical: sh(8) },
+      // Learn
+      learnCard: { width: '90%' as any, maxWidth: sw(500), backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: s(20), padding: s(20), alignItems: 'center' as const, borderWidth: 2, borderColor: 'rgba(255,215,0,0.3)' },
+      learnEn: { fontSize: s(40), fontWeight: '900' as const, color: '#FFF', textShadowColor: 'rgba(255,215,0,0.4)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 2 } },
+      divider: { width: '60%' as any, height: 2, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: sh(12) },
+      learnUz: { fontSize: s(20), color: 'rgba(255,255,255,0.7)', fontWeight: '600' as const },
+      learnBtns: { flexDirection: 'row' as const, marginTop: sh(16), gap: sw(12) },
+      listenBtn: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: s(18), paddingHorizontal: sw(16), paddingVertical: sh(10), flexDirection: 'row' as const, alignItems: 'center' as const, gap: sw(8), borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+      listenTxt: { color: 'rgba(255,255,255,0.8)', fontSize: s(13), fontWeight: '600' as const },
+      nextBtn: { backgroundColor: '#FFD700', borderRadius: s(18), paddingHorizontal: sw(24), paddingVertical: sh(12) },
+      nextTxt: { color: '#1a1a1a', fontSize: s(15), fontWeight: '800' as const },
+      counter: { marginTop: sh(10), color: 'rgba(255,255,255,0.35)', fontSize: s(12) },
+      // Match
+      matchCard: { width: '92%' as any, maxWidth: sw(520), alignItems: 'center' as const },
+      matchQ: { fontSize: s(26), fontWeight: '900' as const, color: '#FFF', marginBottom: sh(4) },
+      matchHint: { fontSize: s(13), color: 'rgba(255,255,255,0.4)', marginBottom: sh(12) },
+      optGrid: { width: '100%' as any, gap: sh(8) },
+      optBtn: { paddingVertical: sh(12), paddingHorizontal: sw(16), borderRadius: s(14), borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', overflow: 'hidden' as const },
+      optTxt: { color: '#FFF', fontSize: s(17), fontWeight: '700' as const, textAlign: 'center' as const },
+      // Speak
+      speakCard: { width: '90%' as any, maxWidth: sw(500), alignItems: 'center' as const },
+      speakEn: { fontSize: s(34), fontWeight: '900' as const, color: '#FFF', marginBottom: sh(4) },
+      speakUz: { fontSize: s(16), color: 'rgba(255,255,255,0.5)', marginBottom: sh(12) },
+      micArea: { alignItems: 'center' as const, marginTop: sh(12) },
+      mic: { width: sm(80), height: sm(80), borderRadius: sm(40), backgroundColor: '#2471A3', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 3, borderColor: '#1B4F72', shadowColor: '#2471A3', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 12, elevation: 8 },
+      micRec: { backgroundColor: '#E74C3C', borderColor: '#C0392B', shadowColor: '#E74C3C' },
+      micTxt: { marginTop: sh(8), color: 'rgba(255,255,255,0.7)', fontSize: s(13), fontWeight: '600' as const },
+      recTxt: { marginTop: sh(4), color: 'rgba(255,255,255,0.35)', fontSize: s(12), fontStyle: 'italic' as const },
+      // Dictation
+      dictCard: { width: '90%' as any, maxWidth: sw(500), alignItems: 'center' as const },
+      bigListen: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: s(20), padding: s(18), alignItems: 'center' as const, borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)', marginBottom: sh(12) },
+      hint: { color: '#FFD700', fontSize: s(15), fontWeight: '600' as const, marginBottom: sh(8) },
+      input: { width: '100%' as any, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: s(14), paddingHorizontal: sw(16), paddingVertical: sh(12), fontSize: s(20), color: '#FFF', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', textAlign: 'center' as const, fontWeight: '700' as const },
+      checkBtn: { marginTop: sh(10), backgroundColor: '#2ECC71', borderRadius: s(14), paddingHorizontal: sw(28), paddingVertical: sh(12) },
+      checkTxt: { color: '#FFF', fontSize: s(16), fontWeight: '800' as const },
+      // Recall
+      recallCard: { width: '90%' as any, maxWidth: sw(500), alignItems: 'center' as const },
+      recallLabel: { fontSize: s(13), color: 'rgba(255,255,255,0.4)', fontWeight: '600' as const },
+      recallUz: { fontSize: s(30), fontWeight: '900' as const, color: '#FFD700', marginVertical: sh(8), textShadowColor: 'rgba(255,215,0,0.3)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 2 } },
+      recallHint: { fontSize: s(13), color: 'rgba(255,255,255,0.4)', marginBottom: sh(6) },
+      revealBox: { marginTop: sh(8), marginBottom: sh(8), paddingHorizontal: sw(20), paddingVertical: sh(14), borderRadius: s(18), backgroundColor: 'rgba(231,76,60,0.12)', borderWidth: 1.5, borderColor: 'rgba(231,76,60,0.35)', alignItems: 'center' as const },
+      revealLabel: { fontSize: s(12), color: 'rgba(255,255,255,0.6)', fontWeight: '700' as const, letterSpacing: 1, marginBottom: sh(4) },
+      revealWord: { fontSize: s(32), fontWeight: '900' as const, color: '#FFF', textShadowColor: 'rgba(255,215,0,0.4)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 2 } },
+      revealHint: { fontSize: s(11), color: 'rgba(255,255,255,0.45)', marginTop: sh(6), fontStyle: 'italic' as const },
+      // Skip
+      skipBtn: { paddingHorizontal: sw(20), paddingVertical: sh(10), alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const, ...shadowFx.soft },
+      skipTxt: { color: '#FFF', fontSize: s(15), fontWeight: '800' as const, letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+      webSkipLesson: { width: sm(40), height: sm(40), borderRadius: sm(20), alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)', ...shadowFx.soft },
+      webSkipTxt: { color: '#FFF', fontSize: s(9), fontWeight: '900' as const, textAlign: 'center' as const },
+      listenBigIcon: { fontSize: s(50) },
+      micIcon: { fontSize: s(40) },
+      listenSmIcon: { fontSize: s(28) },
+      speakListenIcon: { fontSize: s(32) },
+    });
+  }, [SW, SH]);
+
   // === RENDER ===
-  if (loading) return <View style={[st.ctr,{justifyContent:'center'}]}><Text style={st.loadTxt}>{t('loading')}</Text></View>;
+  if (loading) return <View style={[ds.ctr,{justifyContent:'center'}]}><Text style={ds.loadTxt}>{t('loading')}</Text></View>;
 
   const progress = phase==='victory' ? 100 : (PHASE_ORDER.indexOf(phase)/PHASE_ORDER.length)*100 + ((idx/(phase==='match'?matchQueue.length:phase==='recall'?recallQueue.length:words.length))/PHASE_ORDER.length)*100;
 
   const currentWord = phase==='match' ? matchQueue[idx] : phase==='recall' ? recallQueue[idx] : words[idx];
 
   const renderFeedback = () => (
-    <Animated.View style={[st.fbBox, {opacity:feedbackOp}]}>
-      {feedback==='success' ? <Text style={st.fbOk}>{t('correct')} ⭐</Text> : feedback==='fail' ? <Text style={st.fbFail}>{t('tryAgain')}</Text> : null}
+    <Animated.View style={[ds.fbBox, {opacity:feedbackOp}]}>
+      {feedback==='success' ? <Text style={ds.fbOk}>{t('correct')} ⭐</Text> : feedback==='fail' ? <Text style={ds.fbFail}>{t('tryAgain')}</Text> : null}
     </Animated.View>
   );
 
   const renderMic = (ctx:string) => (
-    <View style={st.micArea}>
+    <View style={ds.micArea}>
       <TouchableOpacity onPressIn={()=>startRec(ctx)} onPressOut={stopRec} activeOpacity={0.9}>
-        <Animated.View style={[st.mic, isRecording&&st.micRec, {transform:[{scale:micScale}]}]}>
+        <Animated.View style={[ds.mic, isRecording&&ds.micRec, {transform:[{scale:micScale}]}]}>
           <Text style={{fontSize:40}}>🎙️</Text>
         </Animated.View>
       </TouchableOpacity>
-      <Text style={st.micTxt}>{isChecking?t('checking'):isRecording?t('listening'):t('holdToSpeak')}</Text>
-      {recognizedText?<Text style={st.recTxt}>"{recognizedText}"</Text>:null}
+      <Text style={ds.micTxt}>{isChecking?t('checking'):isRecording?t('listening'):t('holdToSpeak')}</Text>
+      {recognizedText?<Text style={ds.recTxt}>"{recognizedText}"</Text>:null}
     </View>
   );
 
   if (phase==='victory') {
     return (
-      <View style={[st.ctr,{backgroundColor:'#0A0A2E'}]}>
+      <View style={[ds.ctr,{backgroundColor:'#0A0A2E'}]}>
         <LinearGradient colors={['#0A0A2E','#1A1A4E','#2D1B69']} style={StyleSheet.absoluteFill}/>
         <VictoryOverlay
           visible
@@ -441,180 +536,162 @@ export default function WordLessonScreen() {
     : ['#1A0842', '#4B1082', '#A55BD1'];
 
   return (
-    <View style={st.ctr}>
+    <View style={ds.ctr}>
       <LinearGradient colors={bgColors} style={StyleSheet.absoluteFill} start={{x:0,y:0}} end={{x:1,y:1}}/>
 
       {/* Header */}
-      <View style={st.hdr}>
-        <TouchableOpacity style={st.backBtn} onPress={()=>router.replace('/dashboard')} activeOpacity={0.85}>
-          <Text style={st.backIcon}>←</Text>
+      <View style={ds.hdr}>
+        <TouchableOpacity style={ds.backBtn} onPress={()=>router.replace('/dashboard')} activeOpacity={0.85}>
+          <Text style={ds.backIcon}>←</Text>
         </TouchableOpacity>
-        <View style={st.hdrBlock}>
-          <Text style={st.hdrTitle}>{PHASE_NAMES[phase]}</Text>
-          <Text style={st.hdrSub}>{level.toUpperCase()} • Dars {lessonNum}</Text>
+        <View style={ds.hdrBlock}>
+          <Text style={ds.hdrTitle}>{PHASE_NAMES[phase]}</Text>
+          <Text style={ds.hdrSub}>{level.toUpperCase()} • Dars {lessonNum}</Text>
         </View>
-        <View style={st.hdrSpacer}/>
+        {Platform.OS === 'web' ? (
+          <TouchableOpacity
+            style={ds.webSkipLesson}
+            onPress={() => handleVictory()}
+            activeOpacity={0.8}
+          >
+            <LinearGradient colors={['#FF6B6B', '#E03E3E']} style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} />
+            <Text style={ds.webSkipTxt}>⏭ Tugatish</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={ds.hdrSpacer}/>
+        )}
       </View>
-      <View style={st.progWrap}>
-        <View style={[st.progBar,{width:`${Math.min(progress,100)}%`}]}>
+      <View style={ds.progWrap}>
+        <View style={[ds.progBar,{width:`${Math.min(progress,100)}%`}]}>
           <LinearGradient colors={[palette.gold, palette.coral]} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFill}/>
         </View>
       </View>
 
       {renderFeedback()}
 
-      <Animated.View style={[st.body, {transform:[{scale},{translateX:shakeX}]}]}>
+      <Animated.View style={[ds.body, {transform:[{scale},{translateX:shakeX}]}]}>
+       <ScrollView
+         contentContainerStyle={ds.bodyScroll}
+         showsVerticalScrollIndicator={false}
+         bounces={false}
+         keyboardShouldPersistTaps="handled"
+       >
         {/* LEARN */}
         {phase==='learn' && currentWord && (
-          <View style={st.learnCard}>
-            <Text style={st.learnEn}>{currentWord.en}</Text>
-            <View style={st.divider}/>
-            <Text style={st.learnUz}>{currentWord.uz}</Text>
-            <View style={st.learnBtns}>
-              <TouchableOpacity style={st.listenBtn} onPress={()=>speakWord(currentWord.en)}>
+          <View style={ds.learnCard}>
+            <Text style={ds.learnEn}>{currentWord.en}</Text>
+            <View style={ds.divider}/>
+            <Text style={ds.learnUz}>{currentWord.uz}</Text>
+            <View style={ds.learnBtns}>
+              <TouchableOpacity style={ds.listenBtn} onPress={()=>speakWord(currentWord.en)}>
                 <Text style={{fontSize:28}}>🔊</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={st.nextBtn} onPress={learnNext}>
-                <Text style={st.nextTxt}>{t('nextWord')} →</Text>
+              <TouchableOpacity style={ds.nextBtn} onPress={learnNext}>
+                <Text style={ds.nextTxt}>{t('nextWord')} →</Text>
               </TouchableOpacity>
             </View>
-            <Text style={st.counter}>{idx+1} / {words.length}</Text>
+            <Text style={ds.counter}>{idx+1} / {words.length}</Text>
           </View>
         )}
 
         {/* MATCH */}
         {phase==='match' && currentWord && (
-          <View style={st.matchCard}>
-            <Text style={st.matchQ}>🇺🇿 {currentWord.uz}</Text>
-            <Text style={st.matchHint}>{t('chooseCorrect')}</Text>
-            <View style={st.optGrid}>
+          <View style={ds.matchCard}>
+            <Text style={ds.matchQ}>🇺🇿 {currentWord.uz}</Text>
+            <Text style={ds.matchHint}>{t('chooseCorrect')}</Text>
+            <View style={ds.optGrid}>
               {matchOptions.map((opt,i)=>(
-                <TouchableOpacity key={i} style={st.optBtn} onPress={()=>handleMatchSelect(opt)} activeOpacity={0.7}>
+                <TouchableOpacity key={i} style={ds.optBtn} onPress={()=>handleMatchSelect(opt)} activeOpacity={0.7}>
                   <LinearGradient colors={['rgba(255,255,255,0.12)','rgba(255,255,255,0.05)']} style={[StyleSheet.absoluteFill,{borderRadius:16}]}/>
-                  <Text style={st.optTxt}>{opt}</Text>
+                  <Text style={ds.optTxt}>{opt}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={st.counter}>{idx+1} / {matchQueue.length}</Text>
+            <Text style={ds.counter}>{idx+1} / {matchQueue.length}</Text>
           </View>
         )}
 
         {/* SPEAK */}
         {phase==='speak' && currentWord && (
-          <View style={st.speakCard}>
-            <Text style={st.speakEn}>{currentWord.en}</Text>
-            <Text style={st.speakUz}>{currentWord.uz}</Text>
-            <TouchableOpacity style={st.listenBtn} onPress={()=>speakWord(currentWord.en)}>
+          <View style={ds.speakCard}>
+            <Text style={ds.speakEn}>{currentWord.en}</Text>
+            <Text style={ds.speakUz}>{currentWord.uz}</Text>
+            <TouchableOpacity style={ds.listenBtn} onPress={()=>speakWord(currentWord.en)}>
               <Text style={{fontSize:32}}>🔊</Text>
             </TouchableOpacity>
             {renderMic(currentWord.en)}
-            <Text style={st.counter}>{idx+1} / {words.length}</Text>
+            <Text style={ds.counter}>{idx+1} / {words.length}</Text>
           </View>
         )}
 
         {/* DICTATION */}
         {phase==='dictation' && currentWord && (
-          <View style={st.dictCard}>
-            <TouchableOpacity style={st.bigListen} onPress={()=>speakWord(currentWord.en)}>
+          <View style={ds.dictCard}>
+            <TouchableOpacity style={ds.bigListen} onPress={()=>speakWord(currentWord.en)}>
               <Text style={{fontSize:50}}>🔊</Text>
-              <Text style={st.listenTxt}>{t('listenAndWrite')}</Text>
+              <Text style={ds.listenTxt}>{t('listenAndWrite')}</Text>
             </TouchableOpacity>
-            {showHint && <Text style={st.hint}>💡 Boshlanishi: {currentWord.en.slice(0,2)}...</Text>}
-            <TextInput style={st.input} value={dictInput} onChangeText={setDictInput}
+            {showHint && <Text style={ds.hint}>💡 Boshlanishi: {currentWord.en.slice(0,2)}...</Text>}
+            <TextInput style={ds.input} value={dictInput} onChangeText={setDictInput}
               placeholder={t('writeWord')} placeholderTextColor="rgba(255,255,255,0.3)"
               autoCapitalize="none" autoCorrect={false} onSubmitEditing={checkDict}/>
-            <TouchableOpacity style={st.checkBtn} onPress={checkDict}>
-              <Text style={st.checkTxt}>{t('checkBtn')} ✓</Text>
+            <TouchableOpacity style={ds.checkBtn} onPress={checkDict}>
+              <Text style={ds.checkTxt}>{t('checkBtn')} ✓</Text>
             </TouchableOpacity>
-            <Text style={st.counter}>{idx+1} / {words.length}</Text>
+            <Text style={ds.counter}>{idx+1} / {words.length}</Text>
           </View>
         )}
 
         {/* RECALL */}
         {phase==='recall' && currentWord && (
-          <View style={st.recallCard}>
+          <View style={ds.recallCard}>
             <LinearGradient colors={['rgba(255,255,255,0.08)','rgba(255,255,255,0.02)']} style={[StyleSheet.absoluteFill,{borderRadius:radius.xl}]} />
-            <Text style={st.recallLabel}>🇺🇿 Tarjima:</Text>
-            <Text style={st.recallUz}>{currentWord.uz}</Text>
+            <Text style={ds.recallLabel}>🇺🇿 Tarjima:</Text>
+            <Text style={ds.recallUz}>{currentWord.uz}</Text>
             {revealAnswer ? (
-              <View style={st.revealBox}>
-                <Text style={st.revealLabel}>{t('correctAnswer')}</Text>
-                <Text style={st.revealWord}>{revealAnswer}</Text>
-                <Text style={st.revealHint}>{t('rememberIt')}</Text>
+              <View style={ds.revealBox}>
+                <Text style={ds.revealLabel}>{t('correctAnswer')}</Text>
+                <Text style={ds.revealWord}>{revealAnswer}</Text>
+                <Text style={ds.revealHint}>{t('rememberIt')}</Text>
               </View>
             ) : (
               <>
-                <Text style={st.recallHint}>{t('sayInEnglish')}{(recallFails[normalize(currentWord.en)]||0) > 0 ? `  •  ${Math.max(0, 3 - (recallFails[normalize(currentWord.en)]||0))} ${t('attemptsLeft')}` : ''}</Text>
+                <Text style={ds.recallHint}>{t('sayInEnglish')}{(recallFails[normalize(currentWord.en)]||0) > 0 ? `  •  ${Math.max(0, 3 - (recallFails[normalize(currentWord.en)]||0))} ${t('attemptsLeft')}` : ''}</Text>
                 {renderMic(currentWord.en)}
               </>
             )}
-            <Text style={st.counter}>{idx+1} / {recallQueue.length}</Text>
+            <Text style={ds.counter}>{idx+1} / {recallQueue.length}</Text>
           </View>
         )}
+
+        {/* WEB SKIP BUTTON */}
+        {Platform.OS === 'web' && phase !== 'learn' && currentWord && (
+          <TouchableOpacity
+            style={[ds.skipBtn, { marginTop: 24 }]}
+            onPress={() => {
+              if (phase === 'match') handleMatchSelect(currentWord.en);
+              else if (phase === 'speak') checkSpeak(currentWord.en, currentWord.en);
+              else if (phase === 'dictation') {
+                showFB('success'); playSound('success');
+                setTimeout(() => {
+                  setDictInput(''); setDictFails(0); setShowHint(false);
+                  const ni=idxRef.current+1;
+                  if (ni<wordsRef.current.length) {
+                    idxRef.current=ni; setIdx(ni); animIn();
+                    setTimeout(()=>speakWord(wordsRef.current[ni].en),400);
+                  } else nextPhase();
+                }, 800);
+              }
+              else if (phase === 'recall') checkRecall(currentWord.en, currentWord.en);
+            }}
+          >
+            <LinearGradient colors={[palette.mint, palette.mintDeep]} style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} />
+            <Text style={ds.skipTxt}>✅ {t('correct')}</Text>
+          </TouchableOpacity>
+        )}
+       </ScrollView>
       </Animated.View>
     </View>
   );
 }
 
-const st = StyleSheet.create({
-  ctr:{flex:1},
-  loadTxt:{color:'#fff',fontSize:18,textAlign:'center',fontWeight:'700'},
-  hdr:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:spacing.lg,paddingTop:spacing.md,gap:spacing.md},
-  backBtn:{width:44,height:44,borderRadius:22,backgroundColor:'rgba(255,255,255,0.25)',borderWidth:1.5,borderColor:'rgba(255,255,255,0.45)',alignItems:'center',justifyContent:'center',...shadowFx.soft},
-  backIcon:{color:'#FFF',fontSize:24,fontWeight:'900',marginTop:-2},
-  hdrBlock:{flex:1,alignItems:'center'},
-  hdrSpacer:{width:44},
-  hdrTitle:{fontSize:20,fontWeight:'900',color:palette.gold,letterSpacing:1,textShadowColor:'rgba(0,0,0,0.35)',textShadowOffset:{width:0,height:1},textShadowRadius:4},
-  hdrSub:{fontSize:13,fontWeight:'700',color:'rgba(255,255,255,0.85)',marginTop:2,letterSpacing:1},
-  progWrap:{height:10,backgroundColor:'rgba(0,0,0,0.18)',marginHorizontal:spacing.lg,marginTop:10,borderRadius:5,overflow:'hidden',borderWidth:1,borderColor:'rgba(255,255,255,0.2)'},
-  progBar:{height:'100%',borderRadius:5,overflow:'hidden'},
-  fbBox:{position:'absolute',top:'14%',alignSelf:'center',zIndex:99,paddingHorizontal:spacing.xl,paddingVertical:10,borderRadius:radius.pill,backgroundColor:'rgba(0,0,0,0.75)',borderWidth:1,borderColor:'rgba(255,255,255,0.3)',...shadowFx.lifted},
-  fbOk:{color:'#2ECC71',fontSize:20,fontWeight:'bold'},
-  fbFail:{color:'#E74C3C',fontSize:18,fontWeight:'bold'},
-  body:{flex:1,justifyContent:'center',alignItems:'center',padding:16},
-  // Learn
-  learnCard:{width:'90%',backgroundColor:'rgba(255,255,255,0.08)',borderRadius:24,padding:30,alignItems:'center',borderWidth:2,borderColor:'rgba(255,215,0,0.3)'},
-  learnEn:{fontSize:48,fontWeight:'900',color:'#FFF',textShadowColor:'rgba(255,215,0,0.4)',textShadowRadius:10,textShadowOffset:{width:0,height:2}},
-  divider:{width:'60%',height:2,backgroundColor:'rgba(255,255,255,0.15)',marginVertical:16},
-  learnUz:{fontSize:22,color:'rgba(255,255,255,0.7)',fontWeight:'600'},
-  learnBtns:{flexDirection:'row',marginTop:24,gap:16},
-  listenBtn:{backgroundColor:'rgba(255,255,255,0.1)',borderRadius:20,paddingHorizontal:20,paddingVertical:12,flexDirection:'row',alignItems:'center',gap:8,borderWidth:1,borderColor:'rgba(255,255,255,0.2)'},
-  listenTxt:{color:'rgba(255,255,255,0.8)',fontSize:14,fontWeight:'600'},
-  nextBtn:{backgroundColor:'#FFD700',borderRadius:20,paddingHorizontal:28,paddingVertical:14},
-  nextTxt:{color:'#1a1a1a',fontSize:16,fontWeight:'800'},
-  counter:{marginTop:16,color:'rgba(255,255,255,0.35)',fontSize:13},
-  // Match
-  matchCard:{width:'90%',alignItems:'center'},
-  matchQ:{fontSize:32,fontWeight:'900',color:'#FFF',marginBottom:8},
-  matchHint:{fontSize:14,color:'rgba(255,255,255,0.4)',marginBottom:20},
-  optGrid:{width:'100%',gap:12},
-  optBtn:{paddingVertical:16,paddingHorizontal:20,borderRadius:16,borderWidth:1.5,borderColor:'rgba(255,255,255,0.2)',overflow:'hidden'},
-  optTxt:{color:'#FFF',fontSize:20,fontWeight:'700',textAlign:'center'},
-  // Speak
-  speakCard:{width:'90%',alignItems:'center'},
-  speakEn:{fontSize:40,fontWeight:'900',color:'#FFF',marginBottom:4},
-  speakUz:{fontSize:18,color:'rgba(255,255,255,0.5)',marginBottom:16},
-  micArea:{alignItems:'center',marginTop:16},
-  mic:{width:90,height:90,borderRadius:45,backgroundColor:'#2471A3',alignItems:'center',justifyContent:'center',borderWidth:3,borderColor:'#1B4F72',shadowColor:'#2471A3',shadowOffset:{width:0,height:0},shadowOpacity:0.6,shadowRadius:12,elevation:8},
-  micRec:{backgroundColor:'#E74C3C',borderColor:'#C0392B',shadowColor:'#E74C3C'},
-  micTxt:{marginTop:10,color:'rgba(255,255,255,0.7)',fontSize:14,fontWeight:'600'},
-  recTxt:{marginTop:6,color:'rgba(255,255,255,0.35)',fontSize:12,fontStyle:'italic'},
-  // Dictation
-  dictCard:{width:'90%',alignItems:'center'},
-  bigListen:{backgroundColor:'rgba(255,255,255,0.08)',borderRadius:24,padding:24,alignItems:'center',borderWidth:2,borderColor:'rgba(255,255,255,0.15)',marginBottom:16},
-  hint:{color:'#FFD700',fontSize:16,fontWeight:'600',marginBottom:10},
-  input:{width:'100%',backgroundColor:'rgba(255,255,255,0.1)',borderRadius:16,paddingHorizontal:20,paddingVertical:14,fontSize:22,color:'#FFF',borderWidth:1.5,borderColor:'rgba(255,255,255,0.2)',textAlign:'center',fontWeight:'700'},
-  checkBtn:{marginTop:14,backgroundColor:'#2ECC71',borderRadius:16,paddingHorizontal:32,paddingVertical:14},
-  checkTxt:{color:'#FFF',fontSize:18,fontWeight:'800'},
-  // Recall
-  recallCard:{width:'90%',alignItems:'center'},
-  recallLabel:{fontSize:14,color:'rgba(255,255,255,0.4)',fontWeight:'600'},
-  recallUz:{fontSize:36,fontWeight:'900',color:'#FFD700',marginVertical:12,textShadowColor:'rgba(255,215,0,0.3)',textShadowRadius:10,textShadowOffset:{width:0,height:2}},
-  recallHint:{fontSize:14,color:'rgba(255,255,255,0.4)',marginBottom:8},
-  revealBox:{marginTop:12,marginBottom:12,paddingHorizontal:24,paddingVertical:18,borderRadius:20,backgroundColor:'rgba(231,76,60,0.12)',borderWidth:1.5,borderColor:'rgba(231,76,60,0.35)',alignItems:'center'},
-  revealLabel:{fontSize:13,color:'rgba(255,255,255,0.6)',fontWeight:'700',letterSpacing:1,marginBottom:6},
-  revealWord:{fontSize:38,fontWeight:'900',color:'#FFF',textShadowColor:'rgba(255,215,0,0.4)',textShadowRadius:12,textShadowOffset:{width:0,height:2}},
-  revealHint:{fontSize:12,color:'rgba(255,255,255,0.45)',marginTop:8,fontStyle:'italic'},
-  // Victory
-
-});

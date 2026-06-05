@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Animated,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -487,6 +488,26 @@ export default function ExamScreen() {
               </View>
             ) : null}
           </View>
+
+          {/* Web uchun — mikrofon ishlamasa, bosib o'tish mumkin */}
+          {Platform.OS === 'web' && (
+            <TouchableOpacity
+              style={[s.skipBtn, { marginTop: 16 }]}
+              onPress={() => {
+                showFeedback('success');
+                playSound('success');
+                setTimeout(() => {
+                  setIsChecking(false);
+                  isCheckingRef.current = false;
+                  advance();
+                }, 1000);
+              }}
+            >
+              <LinearGradient colors={[palette.mint, palette.mintDeep]} style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} />
+              <Text style={s.skipTxt}>✅ {t('correct')}</Text>
+            </TouchableOpacity>
+          )}
+
         </View>
       </View>
 
@@ -595,5 +616,15 @@ const s = StyleSheet.create({
   recText: {
     fontSize: 13, color: 'rgba(255,255,255,0.95)', fontStyle: 'italic',
     fontWeight: '600', textAlign: 'center',
+  },
+  skipBtn: {
+    paddingHorizontal: 24, paddingVertical: 12,
+    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3,
+  },
+  skipTxt: {
+    color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 1,
+    textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
   },
 });

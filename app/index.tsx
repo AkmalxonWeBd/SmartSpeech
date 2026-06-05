@@ -1,26 +1,29 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import {
-    Animated,
-    Dimensions,
-    Easing,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
+import { preloadSounds, playSound } from '../utils/soundProvider';
+import { t } from '../utils/translations';
+import { loadSettings } from '../utils/settingsManager';
+import { downloadCoreAssets } from '../utils/assetManager';
+import { downloadAllMissingVideos, ALL_VIDEOS } from '../utils/videoDownloader';
 import Backdrop from '../components/dashboard/Backdrop';
 import Locomotive from '../components/dashboard/Locomotive';
-import { downloadCoreAssets } from '../utils/assetManager';
-import { loadSettings } from '../utils/settingsManager';
-import { playSound, preloadSounds } from '../utils/soundProvider';
 import { palette, radius, shadowFx, spacing } from '../utils/theme';
-import { t } from '../utils/translations';
-import { downloadAllMissingVideos, requestStoragePermission } from '../utils/videoDownloader';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const SPLASH_DURATION = 5500;
+// Yuklab olish tugagandan keyin foydalanuvchi 100% ni ko'rishi uchun qisqa
+// minimum vaqt — agar yuklab olish bundan tezroq tugasa, splash baribir 1.2s
+// chamasi ko'rsatiladi (animatsiya silliq tugasin uchun).
+const SPLASH_MIN_DURATION = 1200;
 
 /** Twinkling star. */
 function TwinkleStar({ delay, x, y, size }: { delay: number; x: number; y: number; size: number }) {
@@ -68,9 +71,34 @@ function TwinkleStar({ delay, x, y, size }: { delay: number; x: number; y: numbe
 
 export default function SplashScreen() {
   const [percent, setPercent] = useState(0);
-  const [downloadStatus, setDownloadStatus] = useState<string>('');
+  const [downloadStatus, setDownloadStatus] = useState<string>(t('splashLoading'));
 
   const loadingProgress = useRef(new Animated.Value(0)).current;
+  // Hozirgi yuklab olinayotgan video faylning ichidagi progress (0..1)
+  const currentFileProgressRef = useRef(0);
+  // Allaqachon to'liq yuklab olingan fayllar soni
+  const completedFilesRef = useRef(0);
+  // Umumiy yuklab olinishi kerak bo'lgan fayllar soni (downloadAllMissingVideos
+  // ichidagi missing.length yoki ALL_VIDEOS.length, qaysi biri kelsa).
+  const totalFilesRef = useRef(ALL_VIDEOS.length);
+
+  /**
+   * Real yuklab olish progressi asosida progress bar va foiz qiymatini yangilaydi.
+   * (completed + currentFileFraction) / total formulasi silliq harakat beradi.
+   */
+  const updateRealProgress = () => {
+    const total = Math.max(1, totalFilesRef.current);
+    const fraction = Math.min(
+      1,
+      (completedFilesRef.current + currentFileProgressRef.current) / total,
+    );
+    Animated.timing(loadingProgress, {
+      toValue: fraction,
+      duration: 250,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  };
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(0.85)).current;
   const trainEntry = useRef(new Animated.Value(-SCREEN_W * 0.6)).current;
@@ -93,18 +121,38 @@ export default function SplashScreen() {
         await downloadCoreAssets(() => {});
         await preloadSounds();
 
-        // Download missing videos if user is beginner
-        const userDataStr = await AsyncStorage.getItem('user_data');
-        if (userDataStr) {
-          const userData = JSON.parse(userDataStr);
-          if (userData.level === 'beginner') {
-            await requestStoragePermission();
-            await downloadAllMissingVideos((current, total) => {
-              setDownloadStatus(`Downloading assets... ${current}/${total}`);
-              loadingProgress.setValue(current / total);
-            });
-          }
-        }
+        // Yuklanmagan videolarni yuklab olish — real progress bilan.
+        // onOverallProgress: bitta fayl to'liq tugagandan keyin chaqiriladi.
+        // onFileProgress: hozirgi fayl ichidagi progress (0..1).
+        await downloadAllMissingVideos(
+          (current, total) => {
+            completedFilesRef.current = current;
+            totalFilesRef.current = total;
+            currentFileProgressRef.current = 0;
+            setDownloadStatus(`📥 Videolar yuklanmoqda... ${current}/${total}`);
+            updateRealProgress();
+          },
+          (fileFraction) => {
+            currentFileProgressRef.current = fileFraction;
+            // Hozir yuklab olinayotgan fayl raqamini ko'rsatish (1-asoslangan)
+            const currentIdx = Math.min(
+              completedFilesRef.current + 1,
+              totalFilesRef.current,
+            );
+            setDownloadStatus(
+              `📥 Videolar yuklanmoqda... ${currentIdx}/${totalFilesRef.current}`,
+            );
+            updateRealProgress();
+          },
+        );
+
+        // Yuklab olish tugagach progress barni 100% ga to'ldirib qo'yamiz
+        Animated.timing(loadingProgress, {
+          toValue: 1,
+          duration: 250,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: false,
+        }).start();
 
         playSound('magic');
       } catch (e) {
@@ -152,15 +200,6 @@ export default function SplashScreen() {
       ]),
     ]).start();
 
-    // Loading bar will be controlled by download progress instead of time
-    // If videos are already downloaded, we just jump to 100% quickly.
-    Animated.timing(loadingProgress, {
-      toValue: 1,
-      duration: SPLASH_DURATION - 500,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    }).start();
-
     // Bouncing dots
     Animated.loop(
       Animated.stagger(180, [
@@ -182,7 +221,7 @@ export default function SplashScreen() {
     const timer = setTimeout(() => {
       splashElapsedRef.current = true;
       maybeNavigate();
-    }, SPLASH_DURATION);
+    }, SPLASH_MIN_DURATION);
 
     return () => {
       clearTimeout(timer);

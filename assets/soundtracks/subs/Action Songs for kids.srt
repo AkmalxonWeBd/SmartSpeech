@@ -1,0 +1,62 @@
+1
+00:00:01,000 --> 00:00:04,500
+Clap your hands, clap clap clap!
+
+2
+00:00:05,000 --> 00:00:08,500
+Stomp your feet, stomp stomp stomp!
+
+3
+00:00:09,000 --> 00:00:12,500
+Jump up high, jump jump jump!
+
+4
+00:00:13,000 --> 00:00:16,500
+Spin around, spin spin spin!
+
+5
+00:00:17,000 --> 00:00:21,000
+Clap, stomp, jump, spin
+Do it all again!
+
+6
+00:00:22,000 --> 00:00:25,500
+Touch your head, head head head!
+
+7
+00:00:26,000 --> 00:00:29,500
+Touch your nose, nose nose nose!
+
+8
+00:00:30,000 --> 00:00:33,500
+Touch your ears, ears ears ears!
+
+9
+00:00:34,000 --> 00:00:37,500
+Touch your toes, toes toes toes!
+
+10
+00:00:38,000 --> 00:00:42,000
+Head, nose, ears, toes
+Touch them all again!
+
+11
+00:00:43,000 --> 00:00:46,500
+Shake your hands, shake shake shake!
+
+12
+00:00:47,000 --> 00:00:50,500
+Wave hello, wave wave wave!
+
+13
+00:00:51,000 --> 00:00:54,500
+March in place, march march march!
+
+14
+00:00:55,000 --> 00:00:58,500
+Take a bow, bow bow bow!
+
+15
+00:00:59,000 --> 00:01:03,000
+Shake, wave, march, bow
+You did a great job!

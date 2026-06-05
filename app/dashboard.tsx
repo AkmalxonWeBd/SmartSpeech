@@ -1,33 +1,36 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-    Animated,
-    Dimensions,
-    Easing,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import Svg, {
-    Circle,
-    Defs,
-    Rect,
-    Stop,
-    LinearGradient as SvgGrad
+  Circle,
+  Defs,
+  LinearGradient as SvgGrad,
+  Path,
+  Rect,
+  Stop,
 } from 'react-native-svg';
-import Backdrop, { BackdropVariant } from '../components/dashboard/Backdrop';
-import Locomotive from '../components/dashboard/Locomotive';
-import Mascot, { BOSS_MASCOT, LESSON_MASCOTS } from '../components/dashboard/Mascot';
-import Wagon from '../components/dashboard/Wagon';
-import { API } from '../utils/api';
-import { startBackgroundMusic, stopBackgroundMusic } from '../utils/backgroundMusic';
 import { playSound } from '../utils/soundProvider';
-import { levelVibe, palette, radius, shadowFx, spacing } from '../utils/theme';
+import { startBackgroundMusic, stopBackgroundMusic } from '../utils/backgroundMusic';
 import { t } from '../utils/translations';
+import { API } from '../utils/api';
+import Backdrop, { BackdropVariant } from '../components/dashboard/Backdrop';
+import Mascot, { BOSS_MASCOT, LESSON_MASCOTS } from '../components/dashboard/Mascot';
+import Locomotive from '../components/dashboard/Locomotive';
+import Wagon from '../components/dashboard/Wagon';
+import StationHouse from '../components/dashboard/StationHouse';
+import { levelVibe, palette, radius, shadowFx, spacing } from '../utils/theme';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CAR_HEIGHT = SCREEN_H * 0.34;
@@ -37,6 +40,8 @@ const LOCO_HEIGHT = SCREEN_H * 0.34;
 // visible pillar-box gaps around each SVG.
 const CAR_WIDTH = CAR_HEIGHT * 1.2;
 const TOTAL_LESSONS = 12;
+const HOUSE_WIDTH = CAR_WIDTH * 1.4;
+const HOUSE_HEIGHT = CAR_HEIGHT * 1.6;
 
 type UserData = { age: number; name: string; level: string; progress: number };
 
@@ -149,6 +154,17 @@ function LessonCar({
   const handlePress = async () => {
     if (!isUnlocked) return;
     playSound('click');
+
+    if (level === 'beginner' && index === 1) {
+      // Lesson 1 itself is the intro-video lesson (LessonScreen renders
+      // <IntroLesson /> for meta.type === 'intro'), so route there directly.
+      // Previously we pushed to /intro-video first which then redirected to
+      // /lesson/1 — that caused harflar.mp4 to play twice.
+      const watched = await AsyncStorage.getItem('intro_video_watched');
+      if (!watched) await AsyncStorage.setItem('intro_video_watched', 'true');
+      router.push(`/lesson/${index}`);
+      return;
+    }
 
     if (level === 'a1' || level === 'a2') {
       router.push({
@@ -446,6 +462,14 @@ export default function DashboardScreen() {
   const headerFade = useRef(new Animated.Value(0)).current;
   const settingsRotate = useRef(new Animated.Value(0)).current;
 
+  // Cinematic exam arrival
+  const isFromExam = !!levelUp;
+  const cinematicScale = useRef(new Animated.Value(isFromExam ? 0.25 : 1)).current;
+  const cinematicOpacity = useRef(new Animated.Value(isFromExam ? 1 : 0)).current;
+  const cinematicTrainX = useRef(new Animated.Value(isFromExam ? SCREEN_W * 2 : 0)).current;
+  const steamBurst = useRef(new Animated.Value(0)).current;
+  const [cinematicDone, setCinematicDone] = useState(!isFromExam);
+
   const scrollToTarget = () => {
     if (didAutoScrollRef.current) return;
     if (newlyUnlockedLesson == null) return;
@@ -496,22 +520,9 @@ export default function DashboardScreen() {
   };
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const user = await API.getUser();
-        if (user) setUserData(user);
-      } catch (e) {
-        console.warn('Failed to load user data', e);
-      }
-    };
-    loadData();
-
     playSound('train');
-    Animated.sequence([
-      Animated.delay(300),
-      Animated.spring(trainEntry, { toValue: 0, friction: 6, tension: 18, useNativeDriver: true }),
-    ]).start();
 
+    // Wheel always spinning
     Animated.loop(
       Animated.timing(wheelRotation, {
         toValue: 1,
@@ -521,28 +532,152 @@ export default function DashboardScreen() {
       }),
     ).start();
 
-    Animated.sequence([
-      Animated.delay(500),
-      Animated.parallel([
-        Animated.spring(headerSlide, { toValue: 0, friction: 6, tension: 40, useNativeDriver: true }),
-        Animated.timing(headerFade, { toValue: 1, duration: 500, useNativeDriver: true }),
-      ]),
-    ]).start();
+    if (isFromExam) {
+      // ═══ CINEMATIC 10-SECOND EXAM ARRIVAL ═══
+      // Phase 1 (0-3s): Train appears from far right, tiny, moving fast
+      // Phase 2 (3-6s): Zoom in, train gets bigger
+      // Phase 3 (6-8s): Train slows down dramatically (easeOut)
+      // Phase 4 (8-9s): Train stops, steam burst
+      // Phase 5 (9-10s): Cinematic overlay fades, normal dashboard appears
+      trainEntry.setValue(0); // train position handled by cinematicTrainX
+
+      Animated.sequence([
+        // Phase 1-3: Fast travel from far right
+        Animated.parallel([
+          Animated.timing(cinematicTrainX, {
+            toValue: SCREEN_W * 0.8,
+            duration: 3000,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(cinematicScale, {
+            toValue: 0.45,
+            duration: 3000,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+        // Phase 3-6: Getting closer, zoom in
+        Animated.parallel([
+          Animated.timing(cinematicTrainX, {
+            toValue: SCREEN_W * 0.15,
+            duration: 3000,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(cinematicScale, {
+            toValue: 0.75,
+            duration: 3000,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+        // Phase 6-8: Deceleration — almost stopped
+        Animated.parallel([
+          Animated.timing(cinematicTrainX, {
+            toValue: SCREEN_W * 0.05,
+            duration: 2000,
+            easing: Easing.out(Easing.exp),
+            useNativeDriver: true,
+          }),
+          Animated.timing(cinematicScale, {
+            toValue: 0.9,
+            duration: 2000,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+        // Phase 8-9: Final stop + steam burst
+        Animated.parallel([
+          Animated.timing(cinematicTrainX, {
+            toValue: 0,
+            duration: 800,
+            easing: Easing.out(Easing.exp),
+            useNativeDriver: true,
+          }),
+          Animated.timing(cinematicScale, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.delay(400),
+            Animated.timing(steamBurst, {
+              toValue: 1,
+              duration: 600,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+          ]),
+        ]),
+        // Phase 9-10: Fade out cinematic overlay
+        Animated.parallel([
+          Animated.timing(cinematicOpacity, {
+            toValue: 0,
+            duration: 1200,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(steamBurst, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start(() => {
+        setCinematicDone(true);
+      });
+
+      // Header appears late during cinematic
+      Animated.sequence([
+        Animated.delay(8500),
+        Animated.parallel([
+          Animated.spring(headerSlide, { toValue: 0, friction: 6, tension: 40, useNativeDriver: true }),
+          Animated.timing(headerFade, { toValue: 1, duration: 500, useNativeDriver: true }),
+        ]),
+      ]).start();
+    } else {
+      // ═══ NORMAL ARRIVAL ═══
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.spring(trainEntry, { toValue: 0, friction: 6, tension: 18, useNativeDriver: true }),
+      ]).start();
+
+      Animated.sequence([
+        Animated.delay(500),
+        Animated.parallel([
+          Animated.spring(headerSlide, { toValue: 0, friction: 6, tension: 40, useNativeDriver: true }),
+          Animated.timing(headerFade, { toValue: 1, duration: 500, useNativeDriver: true }),
+        ]),
+      ]).start();
+    }
   }, []);
 
   const level = userData?.level || 'beginner';
+  const progress = userData?.progress || 1;
+  const hasCompletedA2 = level === 'a2' && progress > TOTAL_LESSONS;
 
   useFocusEffect(
     useCallback(() => {
-      // Start music when dashboard comes into focus
-      if (userData) {
-        startBackgroundMusic(level);
-      }
+      const loadData = async () => {
+        try {
+          const user = await API.getUser();
+          if (user) {
+            setUserData(user);
+            startBackgroundMusic(user.level || 'beginner');
+          }
+        } catch (e) {
+          console.warn('Failed to load user data', e);
+        }
+      };
+      loadData();
+
       return () => {
         // Stop music when navigating away from dashboard
         stopBackgroundMusic();
       };
-    }, [level, userData])
+    }, [])
   );
 
   const vibe = vibes[level] || vibes.beginner;
@@ -604,6 +739,22 @@ export default function DashboardScreen() {
           )}
         </View>
 
+        {/* Soundtracks tugmasi — barcha bosqichlarda doimo ko'rinadi */}
+        <TouchableOpacity
+          onPress={() => {
+            playSound('click');
+            router.push('/soundtracks' as any);
+          }}
+          style={styles.soundtrackBtn}
+          activeOpacity={0.85}
+        >
+          <LinearGradient
+            colors={['rgba(255,213,79,0.45)', 'rgba(249,168,37,0.20)']}
+            style={[StyleSheet.absoluteFill, { borderRadius: radius.pill }]}
+          />
+          <Text style={styles.soundtrackIcon}>🎵</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={handleSettingsPress} style={styles.settingsBtn}>
           <LinearGradient
             colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.05)']}
@@ -663,6 +814,93 @@ export default function DashboardScreen() {
           </Animated.View>
         </ScrollView>
       </View>
+
+      {/* ── Cinematic exam arrival overlay ── */}
+      {isFromExam && !cinematicDone && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { zIndex: 500, justifyContent: 'flex-end', overflow: 'hidden' },
+            { opacity: cinematicOpacity },
+          ]}
+        >
+          {/* Dark cinematic bars */}
+          <View style={cinematicStyles.topBar} />
+          <View style={cinematicStyles.bottomBar} />
+
+          {/* Moving train silhouette */}
+          <Animated.View
+            style={[
+              cinematicStyles.trainWrap,
+              {
+                transform: [
+                  { translateX: cinematicTrainX },
+                  { scale: cinematicScale },
+                ],
+              },
+            ]}
+          >
+            <View style={cinematicStyles.trainRow}>
+              <Locomotive wheelSpin={wheelSpin} height={LOCO_HEIGHT * 0.9} />
+              {Array.from({ length: 4 }, (_, i) => (
+                <Wagon
+                  key={i}
+                  width={CAR_WIDTH * 0.9}
+                  height={CAR_HEIGHT * 0.9}
+                  wheelSpin={wheelSpin}
+                  colors={vibe.carColors}
+                  index={i + 1}
+                  locked={false}
+                />
+              ))}
+            </View>
+          </Animated.View>
+
+          {/* Station house silhouette (always visible during cinematic if unlocked) */}
+          {hasCompletedA2 && (
+            <View style={cinematicStyles.houseWrap}>
+              <StationHouse width={HOUSE_WIDTH * 1.1} height={HOUSE_HEIGHT * 1.1} />
+            </View>
+          )}
+
+          {/* Steam burst when stopping */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              cinematicStyles.steamWrap,
+              {
+                opacity: steamBurst,
+                transform: [
+                  {
+                    scale: steamBurst.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.5, 2.5],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {[0, 1, 2, 3, 4].map((i) => (
+              <View
+                key={i}
+                style={[
+                  cinematicStyles.steamPuff,
+                  {
+                    left: 30 + i * 25,
+                    top: -10 + (i % 2) * 15,
+                    width: 35 + i * 8,
+                    height: 35 + i * 8,
+                    borderRadius: 20 + i * 4,
+                    opacity: 0.6 - i * 0.08,
+                  },
+                ]}
+              />
+            ))}
+          </Animated.View>
+        </Animated.View>
+      )}
 
       {/* Level-up banner */}
       {levelUp ? <LevelUpBanner targetLevel={levelUp} /> : null}
@@ -836,6 +1074,19 @@ const styles = StyleSheet.create({
     ...shadowFx.cardLg,
   },
   settingsIcon: { fontSize: 24 },
+  soundtrackBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,213,79,0.55)',
+    overflow: 'hidden',
+    marginRight: 10,
+    ...shadowFx.cardLg,
+  },
+  soundtrackIcon: { fontSize: 24 },
   trainArea: {
     position: 'absolute',
     bottom: 0,
@@ -850,4 +1101,52 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   trainRow: { flexDirection: 'row', alignItems: 'flex-end' },
+});
+
+const cinematicStyles = StyleSheet.create({
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: SCREEN_H * 0.12,
+    backgroundColor: '#000',
+    zIndex: 10,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: SCREEN_H * 0.08,
+    backgroundColor: '#000',
+    zIndex: 10,
+  },
+  trainWrap: {
+    position: 'absolute',
+    bottom: SCREEN_H * 0.1,
+    left: 0,
+    zIndex: 5,
+  },
+  trainRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  houseWrap: {
+    position: 'absolute',
+    bottom: SCREEN_H * 0.08,
+    left: SCREEN_W * 0.04,
+    zIndex: 4,
+  },
+  steamWrap: {
+    position: 'absolute',
+    bottom: SCREEN_H * 0.22,
+    left: SCREEN_W * 0.12,
+    zIndex: 6,
+    flexDirection: 'row',
+  },
+  steamPuff: {
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    position: 'absolute',
+  },
 });

@@ -1,0 +1,63 @@
+1
+00:00:01,000 --> 00:00:05,000
+One, two, three, four, five
+
+2
+00:00:05,500 --> 00:00:09,000
+Once I caught a fish alive
+
+3
+00:00:09,500 --> 00:00:13,000
+Six, seven, eight, nine, ten
+
+4
+00:00:13,500 --> 00:00:17,000
+Then I let it go again
+
+5
+00:00:18,000 --> 00:00:21,000
+Why did you let it go?
+
+6
+00:00:21,500 --> 00:00:25,000
+Because it bit my finger so
+
+7
+00:00:25,500 --> 00:00:29,000
+Which finger did it bite?
+
+8
+00:00:29,500 --> 00:00:33,000
+This little finger on my right
+
+9
+00:00:34,000 --> 00:00:38,000
+One, two, three, four, five
+
+10
+00:00:38,500 --> 00:00:42,000
+Once I caught a fish alive
+
+11
+00:00:42,500 --> 00:00:46,000
+Six, seven, eight, nine, ten
+
+12
+00:00:46,500 --> 00:00:50,000
+Then I let it go again
+
+13
+00:00:51,000 --> 00:00:54,000
+Why did you let it go?
+
+14
+00:00:54,500 --> 00:00:58,000
+Because it bit my finger so
+
+15
+00:00:58,500 --> 00:01:02,000
+Which finger did it bite?
+
+16
+00:01:02,500 --> 00:01:07,000
+This little finger on my right!

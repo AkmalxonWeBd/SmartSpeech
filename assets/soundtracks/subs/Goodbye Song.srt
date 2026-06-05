@@ -1,0 +1,45 @@
+1
+00:00:01,000 --> 00:00:04,500
+Goodbye, goodbye, goodbye my friends
+
+2
+00:00:05,000 --> 00:00:08,500
+Goodbye, goodbye, goodbye my friends
+
+3
+00:00:09,000 --> 00:00:12,500
+It's time to say goodbye
+
+4
+00:00:13,000 --> 00:00:16,000
+See you next time!
+
+5
+00:00:17,000 --> 00:00:20,500
+Goodbye, goodbye
+See you again
+
+6
+00:00:21,000 --> 00:00:24,500
+Goodbye, goodbye
+See you my friend
+
+7
+00:00:25,000 --> 00:00:28,500
+I had fun today
+
+8
+00:00:29,000 --> 00:00:32,000
+It was a great day
+
+9
+00:00:33,000 --> 00:00:37,000
+Goodbye, goodbye, goodbye!
+
+10
+00:00:38,000 --> 00:00:41,500
+See you tomorrow!
+
+11
+00:00:42,000 --> 00:00:46,000
+Goodbye everyone!
